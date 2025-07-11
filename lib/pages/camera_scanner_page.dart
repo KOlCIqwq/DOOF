@@ -19,6 +19,7 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   bool _isInitialized = false;
   bool _isProcessing = false;
   static const platform = MethodChannel('barcode_scanner');
+  String _debugMessage = 'Initializing...';
   String? _errorMessage;
   int _frameSkipCounter = 0;
   bool _isHandlingResult = false;
@@ -31,17 +32,12 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   void initState() {
     super.initState();
     _slideController = AnimationController(
-      // The duration can be slightly increased for a more noticeable pop
       duration: const Duration(milliseconds: 500),
       vsync: this,
     );
     _slideAnimation =
         Tween<Offset>(begin: const Offset(0, 1.5), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _slideController,
-            // This curve creates the "pop up from below" effect by overshooting slightly
-            curve: Curves.easeOutBack,
-          ),
+          CurvedAnimation(parent: _slideController, curve: Curves.easeOutBack),
         );
     WidgetsBinding.instance.addPostFrameCallback((_) => _initializeCamera());
   }
@@ -63,11 +59,7 @@ class _CameraScannerPageState extends State<CameraScannerPage>
       if (!mounted) return;
       setState(() => _isInitialized = true);
       await _controller!.setFocusMode(FocusMode.auto);
-
-      await Future.delayed(const Duration(milliseconds: 250));
-      if (mounted) {
-        await _controller!.startImageStream(_processImage);
-      }
+      await _controller!.startImageStream(_processImage);
     } catch (e) {
       if (mounted)
         setState(() => _errorMessage = 'Failed to initialize camera: $e');
@@ -75,9 +67,11 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   }
 
   void _processImage(CameraImage image) async {
+    if (_isHandlingResult) return;
+
     _frameSkipCounter++;
     if (_frameSkipCounter % 5 != 0) return;
-    if (_isProcessing || _isHandlingResult) return;
+    if (_isProcessing) return;
     _isProcessing = true;
 
     try {
@@ -91,7 +85,6 @@ class _CameraScannerPageState extends State<CameraScannerPage>
 
       if (result != null && result is String && result.isNotEmpty && mounted) {
         _isHandlingResult = true;
-        await _controller?.stopImageStream();
         HapticFeedback.lightImpact();
 
         final product = FoodItem(
@@ -129,18 +122,12 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   }
 
   void _dismissPreviewAndRescan() {
-    _slideController.reverse().then((_) async {
+    _slideController.reverse().then((_) {
       if (mounted) {
         setState(() {
           _scannedProduct = null;
           _isHandlingResult = false;
         });
-        await Future.delayed(const Duration(milliseconds: 250));
-        if (mounted &&
-            _controller != null &&
-            _controller!.value.isInitialized) {
-          _controller!.startImageStream(_processImage);
-        }
       }
     });
   }
@@ -176,11 +163,13 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      // The key change to make the background transparent.
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
+          // The CameraPreview is the base layer and will now be visible behind the preview panel.
           if (_isInitialized && _controller != null)
-            CameraPreview(_controller!),
+            SizedBox.expand(child: CameraPreview(_controller!)),
           if (_isInitialized)
             CustomPaint(painter: ScannerOverlayPainter(), size: Size.infinite),
           if (!_isInitialized || _errorMessage != null) _buildStatusView(),
@@ -263,13 +252,16 @@ class _CameraScannerPageState extends State<CameraScannerPage>
       color: Colors.black,
       child: Center(
         child: _errorMessage != null
-            // SHould be a debug message box
             ? Text(_errorMessage!, style: const TextStyle(color: Colors.red))
             : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const CircularProgressIndicator(color: Colors.white),
                   const SizedBox(height: 16),
+                  Text(
+                    _debugMessage,
+                    style: const TextStyle(color: Colors.white),
+                  ),
                 ],
               ),
       ),
