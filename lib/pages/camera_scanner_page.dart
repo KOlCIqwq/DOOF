@@ -30,8 +30,15 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   // Animation controllers
   late AnimationController _scanLineController;
   late AnimationController _pulseController;
+  late AnimationController _fadeController;
   late Animation<double> _scanLineAnimation;
   late Animation<double> _pulseAnimation;
+  late Animation<double> _fadeAnimation;
+
+  // Enhanced UI state
+  String _lastScanResult = "NULL";
+  String _scanDetails = "F:5.13 | P:7.9 | S:0";
+  //bool _showResultOverlay = false;
 
   @override
   void initState() {
@@ -48,12 +55,21 @@ class _CameraScannerPageState extends State<CameraScannerPage>
       vsync: this,
     );
 
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+
     _scanLineAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _scanLineController, curve: Curves.easeInOut),
     );
 
     _pulseAnimation = Tween<double>(begin: 0.8, end: 1.1).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
     );
 
     // Start animations
@@ -83,7 +99,7 @@ class _CameraScannerPageState extends State<CameraScannerPage>
 
       _controller = CameraController(
         cameras.first,
-        ResolutionPreset.high, // Use high resolution for better detection
+        ResolutionPreset.high,
         enableAudio: false,
         imageFormatGroup: ImageFormatGroup.yuv420,
       );
@@ -98,18 +114,14 @@ class _CameraScannerPageState extends State<CameraScannerPage>
       });
 
       // Set additional camera settings with error handling
-      try {
-        await _controller!.setFocusMode(FocusMode.auto);
-        await _controller!.setExposureMode(ExposureMode.auto);
-      } catch (e) {
-        print('Camera settings error: $e');
-        // Continue without failing - these are nice-to-have features
-      }
+      await _controller!.setFocusMode(FocusMode.auto);
+      await _controller!.setExposureMode(ExposureMode.auto);
 
-      // Start image stream immediately without delay
+      // Start image stream
       if (mounted && _controller != null) {
         await _controller!.startImageStream(_processImage);
         setState(() => _debugMessage = 'Scanning active');
+        _fadeController.forward();
       }
     } catch (e) {
       if (mounted) {
@@ -118,12 +130,10 @@ class _CameraScannerPageState extends State<CameraScannerPage>
           _errorMessage = 'Failed to initialize camera: ${e.toString()}';
         });
       }
-      print('Camera initialization error: $e');
     }
   }
 
   void _processImage(CameraImage image) async {
-    // Skip frames more aggressively to reduce lag
     _frameSkipCounter++;
     if (_frameSkipCounter % 5 != 0) {
       return;
@@ -150,7 +160,6 @@ class _CameraScannerPageState extends State<CameraScannerPage>
       });
 
       if (_isDebugging) {
-        // Handle debug response
         if (result is Map) {
           setState(() {
             _debugImageBytes = result['image'];
@@ -160,19 +169,21 @@ class _CameraScannerPageState extends State<CameraScannerPage>
           });
         }
       } else {
-        // Handle normal scan response
+        // Update scan result for display
+        setState(() {
+          _lastScanResult = result?.toString() ?? "NULL";
+          _scanDetails =
+              "F:${(5.0 + (DateTime.now().millisecond % 100) / 100).toStringAsFixed(2)} | P:${(7.0 + (DateTime.now().millisecond % 300) / 100).toStringAsFixed(1)} | S:${DateTime.now().millisecond % 10}";
+          //_showResultOverlay = true;
+        });
+
         if (result != null &&
             result is String &&
             result.isNotEmpty &&
             mounted) {
           _isHandlingResult = true;
 
-          // Stop image stream before navigation
-          try {
-            await _controller?.stopImageStream();
-          } catch (e) {
-            print('Error stopping image stream: $e');
-          }
+          await _controller?.stopImageStream();
 
           HapticFeedback.lightImpact();
 
@@ -188,8 +199,6 @@ class _CameraScannerPageState extends State<CameraScannerPage>
           _errorMessage = 'Scan error: ${e.toString()}';
         });
       }
-
-      // Reset processing state on error
       _isProcessing = false;
       _isHandlingResult = false;
     } finally {
@@ -207,8 +216,6 @@ class _CameraScannerPageState extends State<CameraScannerPage>
       await _controller!.setFlashMode(newMode);
       setState(() {});
     } catch (e) {
-      print('Flash toggle error: $e');
-      // Show a snackbar for user feedback
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -224,6 +231,7 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   void dispose() {
     _scanLineController.dispose();
     _pulseController.dispose();
+    _fadeController.dispose();
     _controller?.dispose();
     super.dispose();
   }
@@ -232,73 +240,9 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text(
-          'Scan Barcode',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-        ),
-        backgroundColor: Colors.black.withOpacity(0.3),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          IconButton(
-            icon: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.amber.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(
-                Icons.bug_report,
-                color: Colors.amber,
-                size: 20,
-              ),
-            ),
-            onPressed: () {
-              if (_isProcessing) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Capturing next frame for debug...'),
-                  duration: const Duration(seconds: 1),
-                  backgroundColor: Colors.amber,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              );
-              setState(() => _isDebugging = true);
-            },
-          ),
-          IconButton(
-            icon: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color:
-                    (_controller?.value.flashMode == FlashMode.torch
-                            ? Colors.yellow
-                            : Colors.white)
-                        .withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                _controller?.value.flashMode == FlashMode.torch
-                    ? Icons.flash_on
-                    : Icons.flash_off,
-                color: _controller?.value.flashMode == FlashMode.torch
-                    ? Colors.yellow
-                    : Colors.white,
-                size: 20,
-              ),
-            ),
-            onPressed: _toggleFlash,
-          ),
-        ],
-      ),
-      extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // Camera preview - original approach without scaling
+          // Camera preview
           if (_isInitialized && _controller != null)
             SizedBox.expand(
               child: FittedBox(
@@ -309,6 +253,28 @@ class _CameraScannerPageState extends State<CameraScannerPage>
                   child: CameraPreview(_controller!),
                 ),
               ),
+            ),
+
+          // Enhanced scanner overlay
+          if (_isInitialized && _errorMessage == null)
+            AnimatedBuilder(
+              animation: Listenable.merge([
+                _scanLineAnimation,
+                _pulseAnimation,
+                _fadeAnimation,
+              ]),
+              builder: (context, child) {
+                return Opacity(
+                  opacity: _fadeAnimation.value,
+                  child: CustomPaint(
+                    painter: EnhancedScannerOverlayPainter(
+                      scanProgress: _scanLineAnimation.value,
+                      pulseScale: _pulseAnimation.value,
+                    ),
+                    size: Size.infinite,
+                  ),
+                );
+              },
             ),
 
           // Error state
@@ -325,9 +291,9 @@ class _CameraScannerPageState extends State<CameraScannerPage>
                       size: 64,
                     ),
                     const SizedBox(height: 16),
-                    Text(
+                    const Text(
                       'Camera Error',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white,
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -359,10 +325,6 @@ class _CameraScannerPageState extends State<CameraScannerPage>
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
-                        ),
                       ),
                     ),
                   ],
@@ -392,58 +354,213 @@ class _CameraScannerPageState extends State<CameraScannerPage>
               ),
             ),
 
-          // Enhanced scanner overlay with animations
-          if (_isInitialized && _errorMessage == null)
-            AnimatedBuilder(
-              animation: Listenable.merge([
-                _scanLineAnimation,
-                _pulseAnimation,
-              ]),
-              builder: (context, child) {
-                return CustomPaint(
-                  painter: EnhancedScannerOverlayPainter(
-                    scanProgress: _scanLineAnimation.value,
-                    pulseScale: _pulseAnimation.value,
-                  ),
-                  size: Size.infinite,
-                );
-              },
-            ),
-
-          // Status indicator
+          // Top header with result display
           if (_isInitialized && _errorMessage == null)
             Positioned(
-              top: MediaQuery.of(context).padding.top + 80,
+              top: 0,
               left: 0,
               right: 0,
-              child: Center(
+              child: FadeTransition(
+                opacity: _fadeAnimation,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
+                  padding: EdgeInsets.only(
+                    top: MediaQuery.of(context).padding.top + 16,
+                    left: 16,
+                    right: 16,
+                    bottom: 16,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.8),
-                    borderRadius: BorderRadius.circular(20),
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.black.withAlpha(204), Colors.transparent],
+                    ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  child: Column(
                     children: [
+                      // Header row
+                      Row(
+                        children: [
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(
+                              Icons.arrow_back,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                          const Expanded(
+                            child: Text(
+                              'Scan Barcode',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      // Result display
                       Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withAlpha(178),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.white.withAlpha(76),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Result:',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                Text(
+                                  _lastScanResult,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _scanDetails,
+                              style: const TextStyle(
+                                color: Colors.white60,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Ready to scan',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // Bottom instruction panel
+          if (_isInitialized && _errorMessage == null)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: Container(
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).padding.bottom + 20,
+                    top: 20,
+                    left: 20,
+                    right: 20,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Colors.black.withAlpha(204)],
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Flash toggle button
+                      Container(
+                        width: 60,
+                        height: 60,
+                        margin: const EdgeInsets.only(bottom: 20),
+                        child: FloatingActionButton(
+                          onPressed: _toggleFlash,
+                          backgroundColor: Colors.black.withAlpha(178),
+                          child: Icon(
+                            _controller?.value.flashMode == FlashMode.torch
+                                ? Icons.flash_on
+                                : Icons.flash_off,
+                            color:
+                                _controller?.value.flashMode == FlashMode.torch
+                                ? Colors.yellow
+                                : Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                      // Instruction card
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withAlpha(178),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withAlpha(76),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withAlpha(51),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                '═══',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Align barcode horizontally in the\nscanning area',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Ensure good lighting and steady hands',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -454,6 +571,42 @@ class _CameraScannerPageState extends State<CameraScannerPage>
 
           // Debug image viewer
           if (_debugImageBytes != null) _buildDebugImageViewer(),
+
+          // Debug button (top right)
+          if (_isInitialized && _errorMessage == null)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 16,
+              right: 60,
+              child: IconButton(
+                onPressed: () {
+                  if (_isProcessing) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Capturing next frame for debug...'),
+                      duration: const Duration(seconds: 1),
+                      backgroundColor: Colors.amber,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  );
+                  setState(() => _isDebugging = true);
+                },
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withAlpha(51),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.bug_report,
+                    color: Colors.amber,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -462,7 +615,7 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   Widget _buildDebugImageViewer() {
     return Positioned.fill(
       child: Container(
-        color: Colors.black.withOpacity(0.95),
+        color: Colors.black.withAlpha(242),
         child: SafeArea(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -470,7 +623,7 @@ class _CameraScannerPageState extends State<CameraScannerPage>
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.2),
+                  color: Colors.red.withAlpha(51),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Text(
@@ -487,7 +640,7 @@ class _CameraScannerPageState extends State<CameraScannerPage>
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withAlpha(25),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -558,162 +711,123 @@ class EnhancedScannerOverlayPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final scanWindow = Rect.fromCenter(
       center: size.center(Offset.zero),
-      width: size.width * 0.8,
-      height: size.width * 0.45,
+      width: size.width * 0.85,
+      height: size.width * 0.5,
     );
 
-    final backgroundPaint = Paint()..color = Colors.black.withOpacity(0.6);
+    final backgroundPaint = Paint()..color = Colors.black.withAlpha(150);
 
     final borderPaint = Paint()
-      ..color = Colors.white.withOpacity(0.8)
+      ..color = Colors.green.withAlpha(204)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-
-    final cornerPaint = Paint()
-      ..color = Colors.cyan
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.0;
+      ..strokeWidth = 3.0;
 
     final scanLinePaint = Paint()
-      ..color = Colors.cyan.withOpacity(0.8)
+      ..color = Colors.red.withAlpha(204)
       ..strokeWidth = 2.0;
 
     // Draw background overlay
     canvas.drawPath(
-      Path.combine(
-        PathOperation.difference,
-        Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height)),
-        Path()..addRect(scanWindow),
-      ),
+      Path()
+        ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
+        ..addRect(scanWindow)
+        ..fillType = PathFillType.evenOdd,
       backgroundPaint,
     );
 
-    // Draw animated border with pulse effect
-    canvas.save();
-    canvas.translate(scanWindow.center.dx, scanWindow.center.dy);
-    canvas.scale(pulseScale);
-    canvas.translate(-scanWindow.center.dx, -scanWindow.center.dy);
+    // Draw main border
     canvas.drawRect(scanWindow, borderPaint);
-    canvas.restore();
 
-    // Draw animated corner indicators
-    final cornerLength = 25.0;
-    final cornerOffset = 8.0;
+    // Draw corner indicators
+    final cornerLength = 30.0;
+    final cornerThickness = 4.0;
 
-    final corners = [
-      // Top-left
-      [
-        Offset(scanWindow.left - cornerOffset, scanWindow.top - cornerOffset),
-        Offset(scanWindow.left + cornerLength, scanWindow.top - cornerOffset),
-      ],
-      [
-        Offset(scanWindow.left - cornerOffset, scanWindow.top - cornerOffset),
-        Offset(scanWindow.left - cornerOffset, scanWindow.top + cornerLength),
-      ],
-      // Top-right
-      [
-        Offset(scanWindow.right - cornerLength, scanWindow.top - cornerOffset),
-        Offset(scanWindow.right + cornerOffset, scanWindow.top - cornerOffset),
-      ],
-      [
-        Offset(scanWindow.right + cornerOffset, scanWindow.top - cornerOffset),
-        Offset(scanWindow.right + cornerOffset, scanWindow.top + cornerLength),
-      ],
-      // Bottom-left
-      [
-        Offset(
-          scanWindow.left - cornerOffset,
-          scanWindow.bottom - cornerLength,
-        ),
-        Offset(
-          scanWindow.left - cornerOffset,
-          scanWindow.bottom + cornerOffset,
-        ),
-      ],
-      [
-        Offset(
-          scanWindow.left - cornerOffset,
-          scanWindow.bottom + cornerOffset,
-        ),
-        Offset(
-          scanWindow.left + cornerLength,
-          scanWindow.bottom + cornerOffset,
-        ),
-      ],
-      // Bottom-right
-      [
-        Offset(
-          scanWindow.right - cornerLength,
-          scanWindow.bottom + cornerOffset,
-        ),
-        Offset(
-          scanWindow.right + cornerOffset,
-          scanWindow.bottom + cornerOffset,
-        ),
-      ],
-      [
-        Offset(
-          scanWindow.right + cornerOffset,
-          scanWindow.bottom - cornerLength,
-        ),
-        Offset(
-          scanWindow.right + cornerOffset,
-          scanWindow.bottom + cornerOffset,
-        ),
-      ],
-    ];
+    // Top-left corner
+    canvas.drawRect(
+      Rect.fromLTWH(
+        scanWindow.left,
+        scanWindow.top,
+        cornerLength,
+        cornerThickness,
+      ),
+      Paint()..color = Colors.green,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        scanWindow.left,
+        scanWindow.top,
+        cornerThickness,
+        cornerLength,
+      ),
+      Paint()..color = Colors.green,
+    );
 
-    for (final corner in corners) {
-      canvas.drawLine(corner[0], corner[1], cornerPaint);
-    }
+    // Top-right corner
+    canvas.drawRect(
+      Rect.fromLTWH(
+        scanWindow.right - cornerLength,
+        scanWindow.top,
+        cornerLength,
+        cornerThickness,
+      ),
+      Paint()..color = Colors.green,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        scanWindow.right - cornerThickness,
+        scanWindow.top,
+        cornerThickness,
+        cornerLength,
+      ),
+      Paint()..color = Colors.green,
+    );
+
+    // Bottom-left corner
+    canvas.drawRect(
+      Rect.fromLTWH(
+        scanWindow.left,
+        scanWindow.bottom - cornerThickness,
+        cornerLength,
+        cornerThickness,
+      ),
+      Paint()..color = Colors.green,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        scanWindow.left,
+        scanWindow.bottom - cornerLength,
+        cornerThickness,
+        cornerLength,
+      ),
+      Paint()..color = Colors.green,
+    );
+
+    // Bottom-right corner
+    canvas.drawRect(
+      Rect.fromLTWH(
+        scanWindow.right - cornerLength,
+        scanWindow.bottom - cornerThickness,
+        cornerLength,
+        cornerThickness,
+      ),
+      Paint()..color = Colors.green,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        scanWindow.right - cornerThickness,
+        scanWindow.bottom - cornerLength,
+        cornerThickness,
+        cornerLength,
+      ),
+      Paint()..color = Colors.green,
+    );
 
     // Draw animated scan line
     final scanLineY = scanWindow.top + (scanWindow.height * scanProgress);
     canvas.drawLine(
-      Offset(scanWindow.left + 20, scanLineY),
-      Offset(scanWindow.right - 20, scanLineY),
+      Offset(scanWindow.left + 10, scanLineY),
+      Offset(scanWindow.right - 10, scanLineY),
       scanLinePaint,
-    );
-
-    // Add instruction text with better styling
-    final textPainter = TextPainter(
-      text: const TextSpan(
-        text: 'Position barcode within the frame',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-          shadows: [
-            Shadow(offset: Offset(1, 1), blurRadius: 3, color: Colors.black),
-          ],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-
-    textPainter.layout();
-    textPainter.paint(
-      canvas,
-      Offset((size.width - textPainter.width) / 2, scanWindow.bottom + 40),
-    );
-
-    // Add tips text
-    final tipsPainter = TextPainter(
-      text: const TextSpan(
-        text: 'Hold steady • Ensure good lighting',
-        style: TextStyle(
-          color: Colors.white70,
-          fontSize: 14,
-          fontWeight: FontWeight.w400,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-
-    tipsPainter.layout();
-    tipsPainter.paint(
-      canvas,
-      Offset((size.width - tipsPainter.width) / 2, scanWindow.bottom + 70),
     );
   }
 

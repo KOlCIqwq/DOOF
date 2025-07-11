@@ -77,31 +77,40 @@ class MainActivity: FlutterActivity() {
         val yPlane = planes[0]["bytes"] as ByteArray
         val yRowStride = planes[0]["bytesPerRow"] as Int
 
-        // Create the initial luminance source
-        val initialSource = PlanarYUVLuminanceSource(
-            yPlane,           // Y plane data
-            yRowStride,       // dataWidth (bytes per row)
-            imageHeight,      // dataHeight (total height)
-            0,                // left offset
-            0,                // top offset
-            imageWidth,       // crop width
-            imageHeight,      // crop height
-            false             // reverseHorizontal
+        // Create a luminance source for the full, unrotated (landscape) image
+        val fullLandscapeSource = PlanarYUVLuminanceSource(
+            yPlane, yRowStride, imageHeight, 0, 0, imageWidth, imageHeight, false
         )
 
-        // Rotate the image 90 degrees clockwise to fix the orientation
-        // Since the camera preview is rotated 90 degrees counterclockwise, 
-        // we need to rotate it 90 degrees clockwise (or 270 degrees counterclockwise)
-        return if (initialSource.isRotateSupported) {
-            // Rotate 270 degrees counterclockwise (equivalent to 90 degrees clockwise)
-            initialSource
-                .rotateCounterClockwise()
-                .rotateCounterClockwise()
-                .rotateCounterClockwise()
+        // Rotate the source to portrait to match the Flutter preview
+        val rotatedPortraitSource = if (fullLandscapeSource.isRotateSupported) {
+            fullLandscapeSource.rotateCounterClockwise().rotateCounterClockwise().rotateCounterClockwise()
         } else {
-            // If rotation is not supported, manually rotate the image data
             rotateImageData90Clockwise(yPlane, imageWidth, imageHeight, yRowStride)
         }
+
+        // Now crop the rotated source to the scanning area defined in the Flutter UI
+        // UI proportions: width=85% of screen width, height=50% of screen width, centered.
+        val portraitWidth = rotatedPortraitSource.width
+        val portraitHeight = rotatedPortraitSource.height
+        
+        val cropWidth = (portraitWidth * 0.85).toInt()
+        val cropHeight = (portraitWidth * 0.50).toInt() // Height is also relative to portrait width
+
+        val cropLeft = (portraitWidth - cropWidth) / 2
+        val cropTop = (portraitHeight - cropHeight) / 2
+
+        // Ensure the source supports cropping and the dimensions are valid
+        if (rotatedPortraitSource.isCropSupported && cropLeft >= 0 && cropTop >= 0 && cropWidth + cropLeft <= portraitWidth && cropHeight + cropTop <= portraitHeight) {
+            try {
+                return rotatedPortraitSource.crop(cropLeft, cropTop, cropWidth, cropHeight)
+            } catch (e: Exception) {
+                // If cropping fails, fall back to the full image.
+            }
+        }
+        
+        // If not croppable or dimensions are invalid, return the full rotated image as a fallback.
+        return rotatedPortraitSource
     }
 
     private fun rotateImageData90Clockwise(
@@ -146,20 +155,25 @@ class MainActivity: FlutterActivity() {
 
     private fun tryMultipleOrientations(source: LuminanceSource): Result? {
         var currentSource = source
-        
-        // Try original orientation first
-        var result = decode(currentSource)
-        if (result != null) return result
-        
-        // Try rotated orientations if supported
-        if (source.isRotateSupported) {
-            repeat(3) {
-                currentSource = currentSource.rotateCounterClockwise()
-                result = decode(currentSource)
-                if (result != null) return result
+
+        // Try decoding in up to 4 different orientations
+        for (i in 1..4) {
+            // Attempt to decode the image in its current orientation
+            decode(currentSource)?.let { return it }
+
+            // If it fails and we have more orientations to try, rotate the image.
+            // No need to rotate on the final attempt.
+            if (i < 4) {
+                if (currentSource.isRotateSupported) {
+                    currentSource = currentSource.rotateCounterClockwise()
+                } else {
+                    // If rotation is not supported at any point, we can't try other orientations.
+                    break
+                }
             }
         }
-        
+
+        // If no barcode was found in any orientation, return null.
         return null
     }
 
