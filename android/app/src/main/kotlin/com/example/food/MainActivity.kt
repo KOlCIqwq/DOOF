@@ -89,7 +89,6 @@ class MainActivity: FlutterActivity() {
             rotateImageData90Clockwise(yPlane, imageWidth, imageHeight, yRowStride)
         }
 
-        // Now crop the rotated source to the scanning area defined in the Flutter UI
         // UI proportions: width=85% of screen width, height=50% of screen width, centered.
         val portraitWidth = rotatedPortraitSource.width
         val portraitHeight = rotatedPortraitSource.height
