@@ -1,8 +1,7 @@
-// lib/pages/camera_scanner_page.dart
-
-import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:openfoodfacts/openfoodfacts.dart';
 import '../models/food_item.dart';
 import '../widgets/product_preview_widget.dart';
 import 'food_detail_page.dart';
@@ -19,9 +18,11 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   bool _isInitialized = false;
   bool _isProcessing = false;
   static const platform = MethodChannel('barcode_scanner');
-  String _debugMessage = 'Initializing...';
+  final String _debugMessage = 'Initializing...';
   String? _errorMessage;
   int _frameSkipCounter = 0;
+
+  // This flag now controls both the loading indicator and prevents re-scans.
   bool _isHandlingResult = false;
 
   FoodItem? _scannedProduct;
@@ -61,21 +62,62 @@ class _CameraScannerPageState extends State<CameraScannerPage>
       await _controller!.setFocusMode(FocusMode.auto);
       await _controller!.startImageStream(_processImage);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() => _errorMessage = 'Failed to initialize camera: $e');
+      }
     }
   }
 
+  Future<FoodItem?> _fetchProduct(String barcode) async {
+    final ProductQueryConfiguration configuration = ProductQueryConfiguration(
+      barcode,
+      language: OpenFoodFactsLanguage.ENGLISH,
+      fields: [ProductField.ALL],
+      version: ProductQueryVersion.v3,
+    );
+    final ProductResultV3 result = await OpenFoodAPIClient.getProductV3(
+      configuration,
+    );
+
+    if (result.status == ProductResultV3.statusSuccess &&
+        result.product != null) {
+      final product = result.product!;
+      final nutrimentsJson = product.nutriments?.toJson() ?? {};
+      final nutrientsList = nutrimentsJson.entries
+          .where((entry) => entry.value != null)
+          .map((entry) => '${entry.key}: ${entry.value}')
+          .toList();
+
+      return FoodItem(
+        barcode: barcode,
+        name: product.productName ?? 'N/A',
+        brand: product.brands ?? 'N/A',
+        imageUrl: product.imageFrontUrl ?? '',
+        scanDate: DateTime.now(),
+        calories:
+            (nutrimentsJson['energy-kcal_100g'] as num?)?.round() ??
+            (nutrimentsJson['energy_100g'] as num?)?.round() ??
+            0,
+        fat: (nutrimentsJson['fat_100g'] as num?)?.toDouble() ?? 0.0,
+        carbs:
+            (nutrimentsJson['carbohydrates_100g'] as num?)?.toDouble() ?? 0.0,
+        protein: (nutrimentsJson['proteins_100g'] as num?)?.toDouble() ?? 0.0,
+        nutrients: nutrientsList,
+      );
+    }
+    return null;
+  }
+
   void _processImage(CameraImage image) async {
-    if (_isHandlingResult) return;
+    if (_isHandlingResult || _isProcessing) return;
 
     _frameSkipCounter++;
     if (_frameSkipCounter % 5 != 0) return;
-    if (_isProcessing) return;
+
     _isProcessing = true;
 
     try {
-      final result = await platform.invokeMethod('scanBarcode', {
+      final String? barcode = await platform.invokeMethod('scanBarcode', {
         'planes': image.planes
             .map((p) => {'bytes': p.bytes, 'bytesPerRow': p.bytesPerRow})
             .toList(),
@@ -83,37 +125,53 @@ class _CameraScannerPageState extends State<CameraScannerPage>
         'height': image.height,
       });
 
-      if (result != null && result is String && result.isNotEmpty && mounted) {
-        _isHandlingResult = true;
+      if (barcode != null && barcode.isNotEmpty && mounted) {
+        setState(() => _isHandlingResult = true); // Show loading indicator
         HapticFeedback.lightImpact();
 
-        final product = FoodItem(
-          barcode: result,
-          name: 'Fresh Banana',
-          brand:
-              'Nature'
-              's Produce',
-          imageUrl:
-              'https://images.unsplash.com/photo-1571771894824-c8fdc904a423?ixlib=rb-4.0.3&q=80&w=1080',
-          scanDate: DateTime.now(),
-          calories: 105,
-          fat: 0.4,
-          carbs: 27,
-          protein: 1.3,
-          nutrients: [
-            'Potassium: 422mg',
-            'Vitamin C: 10.3mg',
-            'Fiber: 3.1g',
-            'Sugar: 14g',
-          ],
-        );
-        setState(() => _scannedProduct = product);
-        _slideController.forward();
+        final product = await _fetchProduct(barcode);
+        if (!mounted) return;
+
+        if (product != null) {
+          setState(() => _scannedProduct = product);
+          _slideController.forward();
+        } else {
+          // *** FEEDBACK FOR PRODUCT NOT FOUND ***
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Product not found in database. Try another.'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          _resetScanner(); // Reset to allow scanning again
+        }
       }
     } catch (e) {
-      // Handle error
+      // *** FEEDBACK FOR ERRORS ***
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('An error occurred: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        _resetScanner(); // Reset to allow scanning again
+      }
     } finally {
-      _isProcessing = false;
+      if (mounted) {
+        _isProcessing = false;
+      }
+    }
+  }
+
+  void _resetScanner() {
+    if (mounted) {
+      setState(() {
+        _scannedProduct = null;
+        _isHandlingResult = false;
+      });
     }
   }
 
@@ -123,12 +181,7 @@ class _CameraScannerPageState extends State<CameraScannerPage>
 
   void _dismissPreviewAndRescan() {
     _slideController.reverse().then((_) {
-      if (mounted) {
-        setState(() {
-          _scannedProduct = null;
-          _isHandlingResult = false;
-        });
-      }
+      _resetScanner();
     });
   }
 
@@ -163,17 +216,37 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // The key change to make the background transparent.
       backgroundColor: Colors.transparent,
       body: Stack(
+        fit: StackFit.expand,
         children: [
-          // The CameraPreview is the base layer and will now be visible behind the preview panel.
           if (_isInitialized && _controller != null)
-            SizedBox.expand(child: CameraPreview(_controller!)),
+            CameraPreview(_controller!),
           if (_isInitialized)
             CustomPaint(painter: ScannerOverlayPainter(), size: Size.infinite),
+
+          // *** LOADING INDICATOR ***
+          if (_isHandlingResult && _scannedProduct == null)
+            Container(
+              color: Colors.black.withOpacity(0.5),
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(color: Colors.white),
+                    SizedBox(height: 16),
+                    Text(
+                      'Fetching product...',
+                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
           if (!_isInitialized || _errorMessage != null) _buildStatusView(),
           if (_isInitialized) _buildTopControls(),
+
           if (_scannedProduct != null)
             Positioned(
               bottom: 0,

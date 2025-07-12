@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:food/pages/homepage.dart';
+import 'package:openfoodfacts/openfoodfacts.dart';
 
 void main() {
+  OpenFoodAPIConfiguration.userAgent = UserAgent(name: 'FILO');
+  OpenFoodAPIConfiguration.globalLanguages = <OpenFoodFactsLanguage>[
+    OpenFoodFactsLanguage.ENGLISH,
+  ];
   runApp(const MyApp());
 }
 
