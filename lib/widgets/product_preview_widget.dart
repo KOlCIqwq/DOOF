@@ -1,6 +1,5 @@
-// lib/widgets/product_preview_widget.dart
-
-import 'dart:ui'; // Required for ImageFilter
+import 'dart:ui';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/food_item.dart';
@@ -26,7 +25,6 @@ class ProductPreviewWidget extends StatelessWidget {
 
     return GestureDetector(
       onTap: onViewDetails,
-      // ClipRRect is essential for containing the BackdropFilter's blur effect.
       child: ClipRRect(
         borderRadius: borderRadius,
         child: BackdropFilter(
@@ -34,7 +32,7 @@ class ProductPreviewWidget extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(1),
+              color: Colors.white.withOpacity(0.9),
               borderRadius: borderRadius,
             ),
             child: Row(
@@ -42,11 +40,28 @@ class ProductPreviewWidget extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12.0),
-                  child: Image.network(
-                    product.imageUrl,
+                  child: CachedNetworkImage(
+                    imageUrl: product.imageUrl,
                     width: 70,
                     height: 70,
                     fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      width: 70,
+                      height: 70,
+                      color: Colors.grey.shade200,
+                      child: const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2.0),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      width: 70,
+                      height: 70,
+                      color: Colors.grey.shade200,
+                      child: const Icon(
+                        Icons.image_not_supported,
+                        color: Colors.grey,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -117,9 +132,7 @@ class ProductPreviewWidget extends StatelessWidget {
                                   );
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
-                                      content: Text(
-                                        'Barcode copied to clipboard',
-                                      ),
+                                      content: Text('Barcode copied'),
                                       duration: Duration(seconds: 2),
                                     ),
                                   );

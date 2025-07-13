@@ -1,10 +1,12 @@
+// lib/pages/camera_scanner_page.dart
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:openfoodfacts/openfoodfacts.dart';
 import '../models/food_item.dart';
 import '../widgets/product_preview_widget.dart';
-import 'food_detail_page.dart';
+import 'product_detail_page.dart';
 
 class CameraScannerPage extends StatefulWidget {
   const CameraScannerPage({super.key});
@@ -18,11 +20,8 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   bool _isInitialized = false;
   bool _isProcessing = false;
   static const platform = MethodChannel('barcode_scanner');
-  final String _debugMessage = 'Initializing...';
   String? _errorMessage;
   int _frameSkipCounter = 0;
-
-  // This flag now controls both the loading indicator and prevents re-scans.
   bool _isHandlingResult = false;
 
   FoodItem? _scannedProduct;
@@ -41,6 +40,14 @@ class _CameraScannerPageState extends State<CameraScannerPage>
           CurvedAnimation(parent: _slideController, curve: Curves.easeOutBack),
         );
     WidgetsBinding.instance.addPostFrameCallback((_) => _initializeCamera());
+  }
+
+  @override
+  void dispose() {
+    _slideController.dispose();
+    _controller?.stopImageStream();
+    _controller?.dispose();
+    super.dispose();
   }
 
   Future<void> _initializeCamera() async {
@@ -69,51 +76,47 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   }
 
   Future<FoodItem?> _fetchProduct(String barcode) async {
-    final ProductQueryConfiguration configuration = ProductQueryConfiguration(
-      barcode,
-      language: OpenFoodFactsLanguage.ENGLISH,
-      fields: [ProductField.ALL],
-      version: ProductQueryVersion.v3,
-    );
-    final ProductResultV3 result = await OpenFoodAPIClient.getProductV3(
-      configuration,
-    );
-
-    if (result.status == ProductResultV3.statusSuccess &&
-        result.product != null) {
-      final product = result.product!;
-      final nutrimentsJson = product.nutriments?.toJson() ?? {};
-      final nutrientsList = nutrimentsJson.entries
-          .where((entry) => entry.value != null)
-          .map((entry) => '${entry.key}: ${entry.value}')
-          .toList();
-
-      return FoodItem(
-        barcode: barcode,
-        name: product.productName ?? 'N/A',
-        brand: product.brands ?? 'N/A',
-        imageUrl: product.imageFrontUrl ?? '',
-        scanDate: DateTime.now(),
-        calories:
-            (nutrimentsJson['energy-kcal_100g'] as num?)?.round() ??
-            (nutrimentsJson['energy_100g'] as num?)?.round() ??
-            0,
-        fat: (nutrimentsJson['fat_100g'] as num?)?.toDouble() ?? 0.0,
-        carbs:
-            (nutrimentsJson['carbohydrates_100g'] as num?)?.toDouble() ?? 0.0,
-        protein: (nutrimentsJson['proteins_100g'] as num?)?.toDouble() ?? 0.0,
-        nutrients: nutrientsList,
+    try {
+      final ProductQueryConfiguration configuration = ProductQueryConfiguration(
+        barcode,
+        language: OpenFoodFactsLanguage.ENGLISH,
+        fields: [ProductField.ALL],
+        version: ProductQueryVersion.v3,
       );
+      final ProductResultV3 result = await OpenFoodAPIClient.getProductV3(
+        configuration,
+      );
+
+      if (result.status == ProductResultV3.statusSuccess &&
+          result.product != null) {
+        final product = result.product!;
+        final nutrimentsJson = product.nutriments?.toJson() ?? {};
+
+        return FoodItem(
+          barcode: barcode,
+          name: product.productName ?? 'N/A',
+          brand: product.brands ?? 'N/A',
+          imageUrl: product.imageFrontUrl ?? '',
+          scanDate: DateTime.now(),
+          calories: (nutrimentsJson['energy-kcal_100g'] as num?)?.round() ?? 0,
+          fat: (nutrimentsJson['fat_100g'] as num?)?.toDouble() ?? 0.0,
+          carbs:
+              (nutrimentsJson['carbohydrates_100g'] as num?)?.toDouble() ?? 0.0,
+          protein: (nutrimentsJson['proteins_100g'] as num?)?.toDouble() ?? 0.0,
+          nutriments: nutrimentsJson,
+          isKnown: true, // Product was found and is known
+        );
+      }
+    } catch (e) {
+      debugPrint('Error fetching product: $e');
     }
     return null;
   }
 
   void _processImage(CameraImage image) async {
     if (_isHandlingResult || _isProcessing) return;
-
     _frameSkipCounter++;
     if (_frameSkipCounter % 5 != 0) return;
-
     _isProcessing = true;
 
     try {
@@ -126,43 +129,33 @@ class _CameraScannerPageState extends State<CameraScannerPage>
       });
 
       if (barcode != null && barcode.isNotEmpty && mounted) {
-        setState(() => _isHandlingResult = true); // Show loading indicator
+        setState(() => _isHandlingResult = true);
         HapticFeedback.lightImpact();
 
-        final product = await _fetchProduct(barcode);
-        if (!mounted) return;
+        FoodItem? product = await _fetchProduct(barcode);
 
-        if (product != null) {
-          setState(() => _scannedProduct = product);
-          _slideController.forward();
-        } else {
-          // *** FEEDBACK FOR PRODUCT NOT FOUND ***
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Product not found in database. Try another.'),
-              backgroundColor: Colors.orange,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-          _resetScanner(); // Reset to allow scanning again
-        }
+        product ??= FoodItem(
+          barcode: barcode,
+          name: 'Unknown Product',
+          brand: 'Tap to add details',
+          imageUrl: '',
+          scanDate: DateTime.now(),
+          calories: 0,
+          fat: 0,
+          carbs: 0,
+          protein: 0,
+          nutriments: const {},
+          isKnown: false, // Product was not found, so it is unknown
+        );
+
+        if (!mounted) return;
+        setState(() => _scannedProduct = product);
+        _slideController.forward();
       }
     } catch (e) {
-      // *** FEEDBACK FOR ERRORS ***
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('An error occurred: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        _resetScanner(); // Reset to allow scanning again
-      }
+      debugPrint('Error processing image: $e');
     } finally {
-      if (mounted) {
-        _isProcessing = false;
-      }
+      if (mounted) _isProcessing = false;
     }
   }
 
@@ -180,9 +173,7 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   }
 
   void _dismissPreviewAndRescan() {
-    _slideController.reverse().then((_) {
-      _resetScanner();
-    });
+    _slideController.reverse().then((_) => _resetScanner());
   }
 
   void _viewDetails() async {
@@ -199,18 +190,15 @@ class _CameraScannerPageState extends State<CameraScannerPage>
 
   Future<void> _toggleFlash() async {
     if (_controller == null) return;
-    final newMode = _controller!.value.flashMode == FlashMode.torch
-        ? FlashMode.off
-        : FlashMode.torch;
-    await _controller!.setFlashMode(newMode);
-    setState(() {});
-  }
-
-  @override
-  void dispose() {
-    _slideController.dispose();
-    _controller?.dispose();
-    super.dispose();
+    try {
+      final newMode = _controller!.value.flashMode == FlashMode.torch
+          ? FlashMode.off
+          : FlashMode.torch;
+      await _controller!.setFlashMode(newMode);
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('Error toggling flash: $e');
+    }
   }
 
   @override
@@ -224,8 +212,6 @@ class _CameraScannerPageState extends State<CameraScannerPage>
             CameraPreview(_controller!),
           if (_isInitialized)
             CustomPaint(painter: ScannerOverlayPainter(), size: Size.infinite),
-
-          // *** LOADING INDICATOR ***
           if (_isHandlingResult && _scannedProduct == null)
             Container(
               color: Colors.black.withOpacity(0.5),
@@ -243,10 +229,8 @@ class _CameraScannerPageState extends State<CameraScannerPage>
                 ),
               ),
             ),
-
           if (!_isInitialized || _errorMessage != null) _buildStatusView(),
           if (_isInitialized) _buildTopControls(),
-
           if (_scannedProduct != null)
             Positioned(
               bottom: 0,
@@ -326,14 +310,14 @@ class _CameraScannerPageState extends State<CameraScannerPage>
       child: Center(
         child: _errorMessage != null
             ? Text(_errorMessage!, style: const TextStyle(color: Colors.red))
-            : Column(
+            : const Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const CircularProgressIndicator(color: Colors.white),
-                  const SizedBox(height: 16),
+                  CircularProgressIndicator(color: Colors.white),
+                  SizedBox(height: 16),
                   Text(
-                    _debugMessage,
-                    style: const TextStyle(color: Colors.white),
+                    'Initializing...',
+                    style: TextStyle(color: Colors.white),
                   ),
                 ],
               ),
