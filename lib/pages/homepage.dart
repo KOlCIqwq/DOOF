@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/food_item.dart';
+import '../services/inventory_storage.dart';
 import '../widgets/delete_quantity.dart';
 import 'camera_scanner_page.dart';
 import 'product_detail_page.dart';
@@ -14,8 +15,63 @@ class Homepage extends StatefulWidget {
   State<Homepage> createState() => _HomepageState();
 }
 
-class _HomepageState extends State<Homepage> {
+class _HomepageState extends State<Homepage> with WidgetsBindingObserver {
   final List<FoodItem> _inventoryItems = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadInventory();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Save inventory when app goes to background or is paused
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _saveInventory();
+    }
+  }
+
+  Future<void> _loadInventory() async {
+    try {
+      final items = await InventoryStorageService.loadInventory();
+      setState(() {
+        _inventoryItems.clear();
+        _inventoryItems.addAll(items);
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading inventory: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _saveInventory() async {
+    try {
+      await InventoryStorageService.saveInventory(_inventoryItems);
+    } catch (e) {
+      print('Error saving inventory: $e');
+    }
+  }
 
   void _addItemToInventory(FoodItem newItem) {
     setState(() {
@@ -36,6 +92,9 @@ class _HomepageState extends State<Homepage> {
         _inventoryItems.insert(0, newItem);
       }
     });
+
+    // Save inventory after adding item
+    _saveInventory();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -77,6 +136,7 @@ class _HomepageState extends State<Homepage> {
     final item = _inventoryItems[index];
     if (item.quantity == 1) {
       setState(() => _inventoryItems.removeAt(index));
+      _saveInventory(); // Save after removing item
       return;
     }
 
@@ -97,6 +157,46 @@ class _HomepageState extends State<Homepage> {
           _inventoryItems[index] = updatedItem;
         }
       });
+      _saveInventory(); // Save after updating quantity
+    }
+  }
+
+  Future<void> _clearAllInventory() async {
+    final bool? confirmClear = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear All Inventory'),
+        content: const Text(
+          'Are you sure you want to clear all items from your inventory? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmClear == true) {
+      setState(() {
+        _inventoryItems.clear();
+      });
+      await InventoryStorageService.clearInventory();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('All inventory items cleared'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
     }
   }
 
@@ -115,6 +215,28 @@ class _HomepageState extends State<Homepage> {
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 1,
+        actions: [
+          if (_inventoryItems.isNotEmpty)
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'clear') {
+                  _clearAllInventory();
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'clear',
+                  child: Row(
+                    children: [
+                      Icon(Icons.clear_all, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Clear All'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _scanBarcodeAndAddItem,
@@ -122,7 +244,9 @@ class _HomepageState extends State<Homepage> {
         icon: const Icon(Icons.qr_code_scanner),
         label: const Text('Scan Item'),
       ),
-      body: _inventoryItems.isEmpty
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _inventoryItems.isEmpty
           ? _buildEmptyState()
           : _buildInventoryList(),
     );
