@@ -80,22 +80,15 @@ class _HomepageState extends State<Homepage> with WidgetsBindingObserver {
       );
 
       if (existingItemIndex != -1) {
-        // Item exists, create a new one with the updated quantity
         final existingItem = _inventoryItems[existingItemIndex];
-        final updatedItem = existingItem.copyWith(
-          quantity: existingItem.quantity + newItem.quantity,
+        _inventoryItems[existingItemIndex] = existingItem.copyWith(
+          inventoryGrams: existingItem.inventoryGrams + newItem.inventoryGrams,
         );
-        // Replace the old item with the updated one
-        _inventoryItems[existingItemIndex] = updatedItem;
       } else {
-        // Item does not exist, add it to the list
         _inventoryItems.insert(0, newItem);
       }
     });
-
-    // Save inventory after adding item
     _saveInventory();
-
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -134,30 +127,22 @@ class _HomepageState extends State<Homepage> with WidgetsBindingObserver {
 
   Future<void> _showDeleteDialog(int index) async {
     final item = _inventoryItems[index];
-    if (item.quantity == 1) {
-      setState(() => _inventoryItems.removeAt(index));
-      _saveInventory(); // Save after removing item
-      return;
-    }
 
-    final int? quantityToDelete = await showDialog<int>(
+    final double? gramsToDelete = await showDialog<double>(
       context: context,
       builder: (context) => DeleteQuantity(item: item),
     );
 
-    if (quantityToDelete != null && quantityToDelete > 0) {
+    if (gramsToDelete != null && gramsToDelete > 0) {
       setState(() {
-        if (quantityToDelete >= item.quantity) {
-          _inventoryItems.removeAt(index);
+        final newGrams = item.inventoryGrams - gramsToDelete;
+        if (newGrams > 0.1) {
+          _inventoryItems[index] = item.copyWith(inventoryGrams: newGrams);
         } else {
-          // Replace the item with a new one that has the reduced quantity
-          final updatedItem = item.copyWith(
-            quantity: item.quantity - quantityToDelete,
-          );
-          _inventoryItems[index] = updatedItem;
+          _inventoryItems.removeAt(index);
         }
       });
-      _saveInventory(); // Save after updating quantity
+      _saveInventory();
     }
   }
 
@@ -286,19 +271,31 @@ class _HomepageState extends State<Homepage> with WidgetsBindingObserver {
           clipBehavior: Clip.antiAlias,
           child: ListTile(
             onTap: () async {
-              final result = await Navigator.push<FoodItem>(
+              final result = await Navigator.push<dynamic>(
                 context,
                 MaterialPageRoute(
                   builder: (context) =>
                       ProductDetailPage(product: item, showAddButton: true),
                 ),
               );
-              if (result != null) {
+
+              if (result is Map && result['type'] == 'update') {
+                final updatedItem = result['item'] as FoodItem;
+                final idx = _inventoryItems.indexWhere(
+                  (i) => i.barcode == updatedItem.barcode,
+                );
+                if (idx != -1) {
+                  setState(() {
+                    _inventoryItems[idx] = updatedItem;
+                  });
+                  _saveInventory();
+                }
+              } else if (result is FoodItem) {
                 _addItemToInventory(result);
               }
             },
             leading: Hero(
-              tag: item.barcode,
+              tag: '${item.barcode}-${item.packageSize}',
               child: item.imageUrl.isNotEmpty
                   ? CachedNetworkImage(
                       imageUrl: item.imageUrl,
@@ -331,16 +328,15 @@ class _HomepageState extends State<Homepage> with WidgetsBindingObserver {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (item.quantity > 1)
-                  Chip(
-                    label: Text('x${item.quantity}'),
-                    padding: const EdgeInsets.all(4),
-                    labelStyle: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    backgroundColor: Colors.grey.shade200,
+                Chip(
+                  label: Text('x${item.displayQuantity.toStringAsFixed(1)}'),
+                  padding: const EdgeInsets.all(4),
+                  labelStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
                   ),
+                  backgroundColor: Colors.grey.shade200,
+                ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.red),
                   onPressed: () => _showDeleteDialog(index),

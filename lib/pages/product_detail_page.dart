@@ -1,7 +1,10 @@
+// lib/pages/product_detail_page.dart
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../models/food_item.dart';
 import '../utils/nutrient_helper.dart';
+import '../widgets/adjust_package_size_dialog.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final FoodItem product;
@@ -28,8 +31,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     _initializeModes();
   }
 
-  /// Dynamically finds available nutrient modes (e.g., "100g", "serving")
-  /// from the product's nutrient data.
   void _initializeModes() {
     if (widget.product.nutriments.isEmpty) return;
 
@@ -55,8 +56,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     });
   }
 
-  /// Filters the full nutrient map to only include values for the current mode.
-  /// It returns a map with base nutrient keys (e.g., 'sugars').
+  Future<void> _adjustPackageSize() async {
+    final newSize = await showDialog<String>(
+      context: context,
+      builder: (_) =>
+          AdjustPackageSizeDialog(initialValue: widget.product.packageSize),
+    );
+
+    if (newSize != null && newSize.isNotEmpty && mounted) {
+      // Create a copy of the item with the original inventoryGrams but new packageSize
+      final updatedItem = widget.product.copyWith(
+        packageSize: newSize,
+        inventoryGrams: widget.product.inventoryGrams,
+      );
+
+      // Pop with a special map to signify an update
+      Navigator.pop(context, {'type': 'update', 'item': updatedItem});
+    }
+  }
+
   Map<String, String> _getNutrientsForCurrentMode() {
     if (_currentMode == null) return {};
 
@@ -138,7 +156,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       foregroundColor: Colors.black,
       flexibleSpace: FlexibleSpaceBar(
         background: Hero(
-          tag: widget.product.barcode,
+          tag: '${widget.product.barcode}-${widget.product.packageSize}',
           child: Container(
             color: Colors.grey[200],
             padding: const EdgeInsets.all(16.0),
@@ -182,6 +200,26 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               'Brand: ${widget.product.brand}',
               style: const TextStyle(fontSize: 16, color: Colors.black54),
             ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text(
+                'Package Size: ${widget.product.packageSize}',
+                style: const TextStyle(fontSize: 16, color: Colors.black54),
+              ),
+              IconButton(
+                onPressed: _adjustPackageSize,
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  size: 20,
+                  color: Colors.grey,
+                ),
+                tooltip: 'Adjust Package Size',
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -400,13 +438,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   name: 'New Item',
                   brand: 'Unknown',
                   imageUrl: '',
-                  scanDate: DateTime.now(),
-                  calories: 0,
+                  insertDate: DateTime.now(),
                   fat: 0,
                   carbs: 0,
                   protein: 0,
                   nutriments: const {},
-                  quantity: 1,
+                  packageSize: '',
+                  inventoryGrams: 100.0,
                 );
                 Navigator.pop(context, manualItem);
               },
@@ -485,8 +523,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           Expanded(
             child: ElevatedButton.icon(
               onPressed: () {
+                final gramsToAdd =
+                    _selectedQuantity * widget.product.gramsPerUnit;
                 final itemToAdd = widget.product.copyWith(
-                  quantity: _selectedQuantity,
+                  inventoryGrams: gramsToAdd,
+                  insertDate: DateTime.now(),
                 );
                 Navigator.pop(context, itemToAdd);
               },

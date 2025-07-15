@@ -1,8 +1,11 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
-import 'package:food/pages/homepage.dart';
+import 'package:food/pages/main_page.dart';
 import 'package:openfoodfacts/openfoodfacts.dart';
 
 void main() {
+  // These settings are important for the Open Food Facts API
   OpenFoodAPIConfiguration.userAgent = UserAgent(name: 'FILO');
   OpenFoodAPIConfiguration.globalLanguages = <OpenFoodFactsLanguage>[
     OpenFoodFactsLanguage.ENGLISH,
@@ -13,13 +16,17 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(fontFamily: 'Poppins'),
-      home: const Homepage(),
+      theme: ThemeData(
+        fontFamily: 'Poppins',
+        // Optional: Add some cohesive colors
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+        useMaterial3: true,
+      ),
+      home: const MainPage(),
     );
   }
 }

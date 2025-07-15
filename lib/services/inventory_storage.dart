@@ -1,3 +1,5 @@
+// lib/services/inventory_storage.dart
+
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/food_item.dart';
@@ -5,7 +7,6 @@ import '../models/food_item.dart';
 class InventoryStorageService {
   static const String _inventoryKey = 'inventory_items';
 
-  // Save inventory to SharedPreferences
   static Future<void> saveInventory(List<FoodItem> items) async {
     final prefs = await SharedPreferences.getInstance();
     final jsonList = items.map((item) => item.toJson()).toList();
@@ -13,7 +14,6 @@ class InventoryStorageService {
     await prefs.setString(_inventoryKey, jsonString);
   }
 
-  // Load inventory from SharedPreferences
   static Future<List<FoodItem>> loadInventory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -30,13 +30,11 @@ class InventoryStorageService {
     }
   }
 
-  // Clear all inventory data
   static Future<void> clearInventory() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_inventoryKey);
   }
 
-  // Check if inventory data exists
   static Future<bool> hasInventoryData() async {
     try {
       final prefs = await SharedPreferences.getInstance();

@@ -1,6 +1,7 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:food/utils/quantity_parser.dart';
 import 'package:openfoodfacts/openfoodfacts.dart';
 import '../models/food_item.dart';
 import '../widgets/product_preview_widget.dart';
@@ -90,19 +91,27 @@ class _CameraScannerPageState extends State<CameraScannerPage>
         final product = result.product!;
         final nutrimentsJson = product.nutriments?.toJson() ?? {};
 
+        final packageSize = product.quantity?.isNotEmpty == true
+            ? product.quantity!
+            : '100 g';
+        final initialGrams = QuantityParser.toGrams(
+          QuantityParser.parse(packageSize),
+        );
+
         return FoodItem(
           barcode: barcode,
           name: product.productName ?? 'N/A',
           brand: product.brands ?? 'N/A',
           imageUrl: product.imageFrontUrl ?? '',
-          scanDate: DateTime.now(),
-          calories: (nutrimentsJson['energy-kcal_100g'] as num?)?.round() ?? 0,
+          insertDate: DateTime.now(),
+          packageSize: packageSize,
+          inventoryGrams: initialGrams > 0 ? initialGrams : 100.0,
+          nutriments: nutrimentsJson,
           fat: (nutrimentsJson['fat_100g'] as num?)?.toDouble() ?? 0.0,
           carbs:
               (nutrimentsJson['carbohydrates_100g'] as num?)?.toDouble() ?? 0.0,
           protein: (nutrimentsJson['proteins_100g'] as num?)?.toDouble() ?? 0.0,
-          nutriments: nutrimentsJson,
-          isKnown: true, // Product was found and is known
+          isKnown: true,
         );
       }
     } catch (e) {
@@ -137,13 +146,14 @@ class _CameraScannerPageState extends State<CameraScannerPage>
           name: 'Unknown Product',
           brand: 'Tap to add details',
           imageUrl: '',
-          scanDate: DateTime.now(),
-          calories: 0,
-          fat: 0,
-          carbs: 0,
-          protein: 0,
+          insertDate: DateTime.now(),
+          packageSize: '100 g',
+          inventoryGrams: 100.0,
           nutriments: const {},
-          isKnown: false, // Product was not found, so it is unknown
+          fat: 0.0,
+          carbs: 0.0,
+          protein: 0.0,
+          isKnown: false,
         );
 
         if (!mounted) return;
