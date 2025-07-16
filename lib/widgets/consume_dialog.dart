@@ -1,12 +1,14 @@
 // lib/widgets/consume_dialog.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../models/consumption_log.dart';
 import '../models/food_item.dart';
 import '../utils/quantity_parser.dart';
 
 class ConsumeDialog extends StatefulWidget {
   final List<FoodItem> inventoryItems;
-  final Function(FoodItem item, double grams) onConsume;
+  final Function(FoodItem item, double grams, MealType mealType) onConsume;
 
   const ConsumeDialog({
     super.key,
@@ -23,6 +25,7 @@ class _ConsumeDialogState extends State<ConsumeDialog> {
   double _gramsPerUnit = 0;
   double _gramsPerServing = 0;
   double _totalAvailableGrams = 0;
+  MealType _selectedMeal = MealType.snack;
 
   final _gramsController = TextEditingController();
   final _servingsController = TextEditingController();
@@ -31,16 +34,17 @@ class _ConsumeDialogState extends State<ConsumeDialog> {
   @override
   void initState() {
     super.initState();
-    // Automatically select the first consumable item if available
-    final consumableItems = widget.inventoryItems
-        .where(
-          (i) =>
-              QuantityParser.toGrams(QuantityParser.parse(i.packageSize)) > 0,
-        )
-        .toList();
-    if (consumableItems.isNotEmpty) {
-      _onItemChanged(consumableItems.first);
+    if (widget.inventoryItems.isNotEmpty) {
+      _onItemChanged(widget.inventoryItems.first);
     }
+  }
+
+  @override
+  void dispose() {
+    _gramsController.dispose();
+    _servingsController.dispose();
+    _unitsController.dispose();
+    super.dispose();
   }
 
   void _onItemChanged(FoodItem? item) {
@@ -56,7 +60,11 @@ class _ConsumeDialogState extends State<ConsumeDialog> {
 
       _totalAvailableGrams = item.inventoryGrams;
 
-      _gramsController.text = _gramsPerUnit > 0 ? '100' : '0';
+      _gramsController.text =
+          (_gramsPerServing > 0
+                  ? _gramsPerServing
+                  : (_gramsPerUnit > 0 ? 100.0 : 0.0))
+              .toStringAsFixed(0);
       _updateInputsFromGrams();
     });
   }
@@ -104,7 +112,7 @@ class _ConsumeDialogState extends State<ConsumeDialog> {
       return;
     }
 
-    widget.onConsume(_selectedItem!, gramsToConsume);
+    widget.onConsume(_selectedItem!, gramsToConsume, _selectedMeal);
     Navigator.pop(context);
   }
 
@@ -117,40 +125,60 @@ class _ConsumeDialogState extends State<ConsumeDialog> {
         16,
         MediaQuery.of(context).viewInsets.bottom + 16,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Consume Item',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          _buildItemSelector(),
-          if (_selectedItem != null) ...[
-            const SizedBox(height: 24),
-            _buildInputRow('Grams', _gramsController, _updateInputsFromGrams),
-            if (_gramsPerServing > 0) const SizedBox(height: 16),
-            if (_gramsPerServing > 0)
-              _buildInputRow(
-                'Servings',
-                _servingsController,
-                _updateInputsFromServings,
-              ),
-            const SizedBox(height: 16),
-            _buildInputRow('Units', _unitsController, _updateInputsFromUnits),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _handleConsume,
-              child: const Text('Confirm Consumption'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Consume Item',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
+            const SizedBox(height: 16),
+            _buildItemSelector(),
+            if (_selectedItem != null) ...[
+              const SizedBox(height: 16),
+              SegmentedButton<MealType>(
+                segments: const [
+                  ButtonSegment(
+                    value: MealType.breakfast,
+                    label: Text('Breakfast'),
+                  ),
+                  ButtonSegment(value: MealType.lunch, label: Text('Lunch')),
+                  ButtonSegment(value: MealType.dinner, label: Text('Dinner')),
+                  ButtonSegment(value: MealType.snack, label: Text('Snack')),
+                ],
+                selected: {_selectedMeal},
+                onSelectionChanged: (Set<MealType> newSelection) {
+                  setState(() {
+                    _selectedMeal = newSelection.first;
+                  });
+                },
+              ),
+              const SizedBox(height: 24),
+              _buildInputRow('Grams', _gramsController, _updateInputsFromGrams),
+              if (_gramsPerServing > 0) const SizedBox(height: 16),
+              if (_gramsPerServing > 0)
+                _buildInputRow(
+                  'Servings',
+                  _servingsController,
+                  _updateInputsFromServings,
+                ),
+              const SizedBox(height: 16),
+              _buildInputRow('Units', _unitsController, _updateInputsFromUnits),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _handleConsume,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: const Text('Confirm Consumption'),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

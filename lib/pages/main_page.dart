@@ -96,7 +96,11 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     _saveAllData();
   }
 
-  void _logConsumption(FoodItem item, double gramsToConsume) {
+  void _logConsumption(
+    FoodItem item,
+    double gramsToConsume,
+    MealType mealType,
+  ) {
     final Map<String, double> consumedNutrients = {};
     final nutrientsPer100g = item.nutriments;
     nutrientsPer100g.forEach((key, value) {
@@ -109,9 +113,11 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     final log = ConsumptionLog(
       barcode: item.barcode,
       productName: item.name,
+      imageUrl: item.imageUrl,
       consumedGrams: gramsToConsume,
       consumedDate: DateTime.now(),
       consumedNutrients: consumedNutrients,
+      mealType: mealType,
     );
 
     setState(() {

@@ -145,4 +145,25 @@ class NutrientHelper {
     }
     return '${displayValue.round()} $unit';
   }
+
+  static String getOpenFoodFactsKey(String simpleKey) {
+    switch (simpleKey) {
+      case 'energy-kcal':
+        return 'energy-kcal';
+      case 'fat':
+        return 'fat';
+      case 'saturated-fat':
+        return 'saturated-fat';
+      case 'carbohydrates':
+        return 'carbohydrates';
+      case 'sugars':
+        return 'sugars';
+      case 'proteins':
+        return 'proteins';
+      case 'salt':
+        return 'salt';
+      default:
+        return simpleKey;
+    }
+  }
 }

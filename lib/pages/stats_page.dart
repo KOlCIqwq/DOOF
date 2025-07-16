@@ -1,10 +1,13 @@
 // lib/pages/stats_page.dart
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../models/consumption_log.dart';
 import '../models/food_item.dart';
 import '../utils/nutrient_helper.dart';
-import '../widgets/pie_chart_widget.dart';
+import '../utils/recommended_intake_helper.dart';
+import '../widgets/macro_pie_chart.dart';
+import '../widgets/nutrients_progress_bar.dart';
 
 class StatsPage extends StatelessWidget {
   final List<FoodItem> inventoryItems;
@@ -15,18 +18,6 @@ class StatsPage extends StatelessWidget {
     required this.inventoryItems,
     required this.consumptionHistory,
   });
-
-  int _calculateTotalInventoryCalories() {
-    double totalCalories = 0;
-    for (final item in inventoryItems) {
-      final caloriesPer100g =
-          (item.nutriments['energy-kcal_100g'] as num?)?.toDouble() ?? 0.0;
-      if (caloriesPer100g > 0) {
-        totalCalories += (caloriesPer100g / 100) * item.inventoryGrams;
-      }
-    }
-    return totalCalories.round();
-  }
 
   List<ConsumptionLog> _getTodaysConsumption() {
     final now = DateTime.now();
@@ -52,17 +43,76 @@ class StatsPage extends StatelessWidget {
     return totals;
   }
 
+  Map<String, double> _getMacroTotals(List<FoodItem> items) {
+    double totalCarbs = 0;
+    double totalProtein = 0;
+    double totalFat = 0;
+    for (final item in items) {
+      final carbsPer100g =
+          (item.nutriments['carbohydrates_100g'] as num?)?.toDouble() ?? 0;
+      final proteinPer100g =
+          (item.nutriments['proteins_100g'] as num?)?.toDouble() ?? 0;
+      final fatPer100g = (item.nutriments['fat_100g'] as num?)?.toDouble() ?? 0;
+
+      totalCarbs += (carbsPer100g / 100) * item.inventoryGrams;
+      totalProtein += (proteinPer100g / 100) * item.inventoryGrams;
+      totalFat += (fatPer100g / 100) * item.inventoryGrams;
+    }
+    return {'carbs': totalCarbs, 'protein': totalProtein, 'fat': totalFat};
+  }
+
+  List<Map<String, dynamic>> _aggregateMealLogs(List<ConsumptionLog> logs) {
+    final Map<String, Map<String, dynamic>> aggregatedMap = {};
+
+    for (final log in logs) {
+      if (aggregatedMap.containsKey(log.barcode)) {
+        aggregatedMap[log.barcode]!['totalGrams'] += log.consumedGrams;
+      } else {
+        aggregatedMap[log.barcode] = {
+          'productName': log.productName,
+          'imageUrl': log.imageUrl,
+          'totalGrams': log.consumedGrams,
+        };
+      }
+    }
+    return aggregatedMap.values.toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final todaysLogs = _getTodaysConsumption();
     final todaysNutrients = _getTodaysNutrientTotals(todaysLogs);
-    final inventoryCalories = _calculateTotalInventoryCalories();
-    final consumedCalories = (todaysNutrients['energy-kcal'] ?? 0.0).round();
+    final inventoryMacros = _getMacroTotals(inventoryItems);
 
-    final nutrientList = todaysNutrients.entries
-        .where((e) => e.key != 'energy-kcal' && e.value > 0)
+    final consumedCarbs = todaysNutrients['carbohydrates'] ?? 0;
+    final consumedProtein = todaysNutrients['proteins'] ?? 0;
+    final consumedFat = todaysNutrients['fat'] ?? 0;
+
+    final Map<MealType, List<Map<String, dynamic>>> meals = {
+      MealType.breakfast: _aggregateMealLogs(
+        todaysLogs.where((l) => l.mealType == MealType.breakfast).toList(),
+      ),
+      MealType.lunch: _aggregateMealLogs(
+        todaysLogs.where((l) => l.mealType == MealType.lunch).toList(),
+      ),
+      MealType.dinner: _aggregateMealLogs(
+        todaysLogs.where((l) => l.mealType == MealType.dinner).toList(),
+      ),
+      MealType.snack: _aggregateMealLogs(
+        todaysLogs.where((l) => l.mealType == MealType.snack).toList(),
+      ),
+    };
+
+    final primaryNutrientKeys = RecommendedIntakeHelper.dailyValues.keys
+        .map((key) => NutrientHelper.getOpenFoodFactsKey(key))
+        .toSet();
+
+    final otherNutrients = todaysNutrients.entries
+        .where(
+          (entry) =>
+              !primaryNutrientKeys.contains(entry.key) && entry.value > 0.001,
+        )
         .toList();
-    nutrientList.sort((a, b) => b.value.compareTo(a.value)); // Sort by amount
 
     return Scaffold(
       appBar: AppBar(
@@ -73,68 +123,133 @@ class StatsPage extends StatelessWidget {
         centerTitle: true,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: PieChartWidget(
-                  title: 'Inventory',
-                  value: inventoryCalories,
-                  color: Colors.blue,
+                child: Column(
+                  children: [
+                    const Text(
+                      'Inventory',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(
+                      height: 150,
+                      child: MacroPieChart(
+                        carbs: inventoryMacros['carbs'] ?? 0,
+                        protein: inventoryMacros['protein'] ?? 0,
+                        fat: inventoryMacros['fat'] ?? 0,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: PieChartWidget(
-                  title: 'Consumed',
-                  value: consumedCalories,
-                  color: Colors.green,
+                child: Column(
+                  children: [
+                    const Text(
+                      'Consumed Today',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(
+                      height: 150,
+                      child: MacroPieChart(
+                        carbs: consumedCarbs,
+                        protein: consumedProtein,
+                        fat: consumedFat,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'Today\'s Consumed Nutrients',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const Divider(height: 24),
-          if (nutrientList.isEmpty)
-            _buildEmptyNutrientState()
-          else
-            ...nutrientList.map((entry) {
+          _buildSectionHeader("Daily Intake Goals"),
+          ...RecommendedIntakeHelper.dailyValues.entries.map((entry) {
+            final nutrientKey = NutrientHelper.getOpenFoodFactsKey(entry.key);
+            return NutrientProgressBar(
+              name: NutrientHelper.getInfo(nutrientKey).name,
+              currentValue: todaysNutrients[nutrientKey] ?? 0.0,
+              maxValue: entry.value,
+              unit: entry.key == 'energy-kcal' ? 'kcal' : 'g',
+            );
+          }),
+          if (otherNutrients.isNotEmpty) ...[
+            _buildSectionHeader("Other Nutrients"),
+            ...otherNutrients.map((entry) {
               final info = NutrientHelper.getInfo(entry.key);
-              final value = NutrientHelper.formatValue(entry.value, entry.key);
               return ListTile(
-                leading: Icon(info.icon, color: info.color),
-                title: Text(
-                  info.name,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
+                title: Text(info.name),
+                trailing: Text(
+                  NutrientHelper.formatValue(entry.value, entry.key),
                 ),
-                trailing: Text(value, style: const TextStyle(fontSize: 15)),
+                dense: true,
               );
             }),
+          ],
+          _buildSectionHeader("Today's Meals"),
+          _buildMealExpansionTile('Breakfast', MealType.breakfast, meals),
+          _buildMealExpansionTile('Lunch', MealType.lunch, meals),
+          _buildMealExpansionTile('Dinner', MealType.dinner, meals),
+          _buildMealExpansionTile('Snacks', MealType.snack, meals),
         ],
       ),
     );
   }
 
-  Widget _buildEmptyNutrientState() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 40.0),
-      child: Center(
-        child: Column(
-          children: [
-            Icon(Icons.no_food, color: Colors.grey, size: 60),
-            SizedBox(height: 16),
-            Text(
-              'No items consumed today.',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-          ],
-        ),
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 24.0, bottom: 8.0),
+      child: Text(
+        title,
+        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
       ),
+    );
+  }
+
+  Widget _buildMealExpansionTile(
+    String title,
+    MealType mealType,
+    Map<MealType, List<Map<String, dynamic>>> meals,
+  ) {
+    final logs = meals[mealType]!;
+    if (logs.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return ExpansionTile(
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+      initiallyExpanded: true,
+      children: logs
+          .map(
+            (log) => ListTile(
+              leading: SizedBox(
+                width: 40,
+                height: 40,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    imageUrl: log['imageUrl'],
+                    fit: BoxFit.cover,
+                    errorWidget: (context, url, error) =>
+                        const Icon(Icons.fastfood, color: Colors.grey),
+                  ),
+                ),
+              ),
+              title: Text(log['productName']),
+              trailing: Text('${(log['totalGrams'] as double).round()}g'),
+              dense: true,
+            ),
+          )
+          .toList(),
     );
   }
 }
