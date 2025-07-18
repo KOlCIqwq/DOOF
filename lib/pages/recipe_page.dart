@@ -5,6 +5,8 @@ import '../services/themealdb_api_services.dart';
 import '../services/spoonacular_api_service.dart';
 import 'recipe_info.dart';
 
+enum SearchState { initial, loading, success, noResults, error }
+
 class RecipePage extends StatefulWidget {
   final Function(RecipeInfo recipe, MealType mealType) onRecipeConsumed;
   const RecipePage({super.key, required this.onRecipeConsumed});
@@ -16,35 +18,88 @@ class RecipePage extends StatefulWidget {
 class _RecipePageState extends State<RecipePage> {
   final TextEditingController _searchController = TextEditingController();
   List<RecipeSummary> _recipes = [];
-  bool _isLoading = false;
-  String? _errorMessage;
+  SearchState _searchState = SearchState.initial;
+  bool _canLoadFromSpoonacular = false;
+  bool _isLoadingMore = false;
+  String _errorMessage = '';
 
   Future<void> _performSearch(String query) async {
     if (query.isEmpty) return;
     setState(() {
-      _isLoading = true;
-      _errorMessage = null;
+      _searchState = SearchState.loading;
+      _canLoadFromSpoonacular = false;
+      _recipes = [];
     });
 
     try {
       // 1. Try TheMealDB first
-      List<RecipeSummary> results = await TheMealDBApiService.searchRecipes(
+      final mealDbResults = await TheMealDBApiService.searchRecipes(query);
+
+      if (mealDbResults.isNotEmpty) {
+        setState(() {
+          _recipes = mealDbResults;
+          _searchState = SearchState.success;
+          _canLoadFromSpoonacular = true; // Allow loading more from Spoonacular
+        });
+        return;
+      }
+
+      // 2. If TheMealDB has no results, try Spoonacular
+      final spoonacularResults = await SpoonacularApiService.searchRecipes(
         query,
       );
 
-      // 2. If TheMealDB has no results, try Spoonacular
-      if (results.isEmpty) {
-        results = await SpoonacularApiService.searchRecipes(query);
+      if (spoonacularResults.isNotEmpty) {
+        setState(() {
+          _recipes = spoonacularResults;
+          _searchState = SearchState.success;
+          // No more to load after this
+          _canLoadFromSpoonacular = false;
+        });
+      } else {
+        // 3. If both APIs have no results
+        setState(() {
+          _searchState = SearchState.noResults;
+        });
       }
-
-      setState(() {
-        _recipes = results;
-        _isLoading = false;
-      });
     } catch (e) {
       setState(() {
-        _errorMessage = 'Failed to load recipes. Please try again.';
-        _isLoading = false;
+        _searchState = SearchState.error;
+        _errorMessage = 'Something went wrong. Please check your connection.';
+      });
+    }
+  }
+
+  Future<void> _loadMoreFromSpoonacular() async {
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      final spoonacularResults = await SpoonacularApiService.searchRecipes(
+        _searchController.text,
+      );
+      final existingIds = _recipes.map((r) => r.id).toSet();
+      // Add only new recipes to avoid duplicates
+      _recipes.addAll(
+        spoonacularResults.where((r) => !existingIds.contains(r.id)),
+      );
+
+      setState(() {
+        _canLoadFromSpoonacular = false; // Prevent further loading
+        _isLoadingMore = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not load more results.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      setState(() {
+        _isLoadingMore = false;
       });
     }
   }
@@ -83,50 +138,105 @@ class _RecipePageState extends State<RecipePage> {
   }
 
   Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+    switch (_searchState) {
+      case SearchState.loading:
+        return const Center(child: CircularProgressIndicator());
+      case SearchState.error:
+        return _buildFriendlyMessage(
+          Icons.error_outline,
+          Colors.red,
+          _errorMessage,
+        );
+      case SearchState.noResults:
+        return _buildFriendlyMessage(
+          Icons.search_off,
+          Colors.grey,
+          'No recipes found.\nTry a different search term.',
+        );
+      case SearchState.initial:
+        return _buildFriendlyMessage(
+          Icons.menu_book,
+          Colors.grey,
+          'Search for recipes to get started!',
+        );
+      case SearchState.success:
+        return ListView.builder(
+          itemCount: _recipes.length + (_canLoadFromSpoonacular ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index == _recipes.length && _canLoadFromSpoonacular) {
+              return _buildLoadMoreButton();
+            }
+            final recipe = _recipes[index];
+            return Card(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: ListTile(
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    recipe.image,
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                title: Text(recipe.title),
+                onTap: () async {
+                  final result = await Navigator.push<Map<String, dynamic>>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          RecipeInfoPage(recipeSummary: recipe),
+                    ),
+                  );
+                  if (result != null &&
+                      result['recipe'] != null &&
+                      result['mealType'] != null) {
+                    widget.onRecipeConsumed(
+                      result['recipe'],
+                      result['mealType'],
+                    );
+                  }
+                },
+              ),
+            );
+          },
+        );
     }
-    if (_errorMessage != null) {
-      return Center(
-        child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
-      );
-    }
-    if (_recipes.isEmpty) {
-      return const Center(child: Text('Search for recipes to get started!'));
-    }
-    return ListView.builder(
-      itemCount: _recipes.length,
-      itemBuilder: (context, index) {
-        final recipe = _recipes[index];
-        return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: ListTile(
-            leading: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                recipe.image,
-                width: 50,
-                height: 50,
-                fit: BoxFit.cover,
+  }
+
+  Widget _buildFriendlyMessage(IconData icon, Color color, String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 80, color: color),
+            const SizedBox(height: 20),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, color: Colors.black54),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadMoreButton() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: _isLoadingMore
+          ? const Center(child: CircularProgressIndicator())
+          : OutlinedButton.icon(
+              onPressed: _loadMoreFromSpoonacular,
+              icon: const Icon(Icons.add),
+              label: const Text('Load More from Spoonacular'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
               ),
             ),
-            title: Text(recipe.title),
-            onTap: () async {
-              final result = await Navigator.push<Map<String, dynamic>>(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => RecipeInfoPage(recipeSummary: recipe),
-                ),
-              );
-              if (result != null &&
-                  result['recipe'] != null &&
-                  result['mealType'] != null) {
-                widget.onRecipeConsumed(result['recipe'], result['mealType']);
-              }
-            },
-          ),
-        );
-      },
     );
   }
 }
