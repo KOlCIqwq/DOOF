@@ -1,5 +1,3 @@
-// lib/pages/inventory_page.dart
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
@@ -21,7 +19,6 @@ class InventoryPage extends StatelessWidget {
     required this.onAddItem,
     required this.onUpdateInventory,
     required this.onScan,
-    // MODIFIED: The 'onSave' parameter has been removed.
   });
 
   Future<void> _showDeleteDialog(BuildContext context, int index) async {

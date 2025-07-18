@@ -1,5 +1,3 @@
-// lib/models/food_item.dart
-
 import '../utils/quantity_parser.dart';
 
 class FoodItem {

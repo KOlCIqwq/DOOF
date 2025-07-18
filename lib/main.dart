@@ -1,5 +1,3 @@
-// lib/main.dart
-
 import 'package:flutter/material.dart';
 import 'package:food/pages/main_page.dart';
 import 'package:openfoodfacts/openfoodfacts.dart';

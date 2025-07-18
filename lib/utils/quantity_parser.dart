@@ -1,5 +1,3 @@
-// lib/utils/quantity_parser.dart
-
 class QuantityParser {
   static (double, String) parse(String? quantityString) {
     if (quantityString == null || quantityString.isEmpty) {

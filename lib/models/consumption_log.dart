@@ -1,5 +1,3 @@
-// lib/models/consumption_log.dart
-
 enum MealType { breakfast, lunch, dinner, snack }
 
 class ConsumptionLog {

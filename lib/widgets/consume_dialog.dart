@@ -1,7 +1,4 @@
-// lib/widgets/consume_dialog.dart
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../models/consumption_log.dart';
 import '../models/food_item.dart';
 import '../utils/quantity_parser.dart';

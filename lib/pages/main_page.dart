@@ -1,5 +1,3 @@
-// lib/pages/main_page.dart
-
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/consumption_log.dart';
@@ -10,6 +8,8 @@ import '../widgets/consume_dialog.dart';
 import 'camera_scanner_page.dart';
 import 'inventory_page.dart';
 import 'stats_page.dart';
+import '../models/recipe_model.dart';
+import 'recipe_page.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -208,6 +208,62 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     }
   }
 
+  void _logRecipeConsumption(RecipeInfo recipe, MealType mealType) {
+    final Map<String, double> consumedNutrients = {};
+
+    if (recipe.nutrients.isNotEmpty) {
+      // Spoonacular provides nutrients per serving. We'll log them directly.
+      recipe.nutrients.forEach((name, amount) {
+        final key = _mapSpoonacularToOFF(name);
+        if (key != null) {
+          if (key == 'energy-kcal') {
+            consumedNutrients[key] = amount;
+          } else {
+            // All other Spoonacular nutrients are in grams, so no conversion needed
+            consumedNutrients[key] = amount;
+          }
+        }
+      });
+    }
+
+    final log = ConsumptionLog(
+      barcode: 'recipe_${recipe.id}',
+      productName: recipe.title,
+      imageUrl: recipe.image,
+      consumedGrams: recipe.totalGrams, // Use the calculated total grams
+      consumedDate: DateTime.now(),
+      consumedNutrients: consumedNutrients,
+      mealType: mealType,
+    );
+
+    setState(() {
+      _consumptionHistory.insert(0, log);
+      _pageController.jumpToPage(2);
+    });
+
+    _saveAllData();
+    _showSuccessSnackbar('${recipe.title} logged as ${mealType.name}!');
+  }
+
+  String? _mapSpoonacularToOFF(String name) {
+    final map = {
+      'Calories': 'energy-kcal',
+      'Fat': 'fat',
+      'Saturated Fat': 'saturated-fat',
+      'Carbohydrates': 'carbohydrates',
+      'Net Carbohydrates': 'carbohydrates', // Often provided, map to same
+      'Sugar': 'sugars',
+      'Protein': 'proteins',
+      'Sodium': 'sodium',
+      'Fiber': 'fiber',
+      'Vitamin C': 'vitamin-c',
+      'Vitamin A': 'vitamin-a',
+      'Iron': 'iron',
+      'Calcium': 'calcium',
+    };
+    return map[name];
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -223,13 +279,16 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                   onUpdateInventory: _updateInventory,
                   onScan: _scanBarcodeAndAddItem,
                 ),
+                RecipePage(onRecipeConsumed: _logRecipeConsumption),
                 StatsPage(
                   inventoryItems: _inventoryItems,
                   consumptionHistory: _consumptionHistory,
                 ),
               ],
             ),
-      floatingActionButton: _currentIndex == 1
+      floatingActionButton:
+          _currentIndex ==
+              2 // Stats page
           ? FloatingActionButton.extended(
               onPressed: _showConsumeDialog,
               label: const Text(
@@ -248,12 +307,14 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.inventory_2_outlined),
-            activeIcon: Icon(Icons.inventory_2),
             label: 'Inventory',
           ),
           BottomNavigationBarItem(
+            icon: Icon(Icons.menu_book_outlined),
+            label: 'Recipes',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.pie_chart_outline),
-            activeIcon: Icon(Icons.pie_chart),
             label: 'Stats',
           ),
         ],

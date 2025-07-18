@@ -1,5 +1,3 @@
-// lib/widgets/delete_quantity.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/food_item.dart';

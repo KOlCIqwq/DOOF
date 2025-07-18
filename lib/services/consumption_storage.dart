@@ -1,5 +1,3 @@
-// lib/services/consumption_storage.dart
-
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/consumption_log.dart';
