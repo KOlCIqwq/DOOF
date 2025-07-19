@@ -1,7 +1,9 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/food_item.dart';
 import '../utils/nutrient_helper.dart';
+import '../utils/quantity_parser.dart';
 import '../widgets/adjust_package_size_dialog.dart';
 
 class ProductDetailPage extends StatefulWidget {
@@ -22,16 +24,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   int _selectedQuantity = 1;
   List<String> _availableModes = [];
   String? _currentMode;
+  late TextEditingController _remainingGramsController;
 
   @override
   void initState() {
     super.initState();
     _initializeModes();
+    _remainingGramsController = TextEditingController(
+      text: widget.product.inventoryGrams.round().toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _remainingGramsController.dispose();
+    super.dispose();
   }
 
   void _initializeModes() {
     if (widget.product.nutriments.isEmpty) return;
-
     final modes = <String>{};
     for (var key in widget.product.nutriments.keys) {
       final parts = key.split('_');
@@ -39,16 +50,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         modes.add(parts.sublist(1).join('_'));
       }
     }
-
     if (modes.isEmpty) return;
-
     _availableModes = modes.toList();
     _availableModes.sort((a, b) {
       if (a.contains('100g')) return -1;
       if (b.contains('100g')) return 1;
       return a.compareTo(b);
     });
-
     setState(() {
       _currentMode = _availableModes.first;
     });
@@ -62,20 +70,29 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
 
     if (newSize != null && newSize.isNotEmpty && mounted) {
-      // Create a copy of the item with the original inventoryGrams but new packageSize
+      final newGramsPerUnit = QuantityParser.toGrams(
+        QuantityParser.parse(newSize),
+      );
+      // Reset the remaining grams to the new full package size
       final updatedItem = widget.product.copyWith(
         packageSize: newSize,
-        inventoryGrams: widget.product.inventoryGrams,
+        inventoryGrams: newGramsPerUnit,
       );
 
-      // Pop with a special map to signify an update
+      Navigator.pop(context, {'type': 'update', 'item': updatedItem});
+    }
+  }
+
+  void _updateRemainingGrams() {
+    final newGrams = double.tryParse(_remainingGramsController.text);
+    if (newGrams != null) {
+      final updatedItem = widget.product.copyWith(inventoryGrams: newGrams);
       Navigator.pop(context, {'type': 'update', 'item': updatedItem});
     }
   }
 
   Map<String, String> _getNutrientsForCurrentMode() {
     if (_currentMode == null) return {};
-
     final Map<String, String> filteredNutrients = {};
     widget.product.nutriments.forEach((key, value) {
       if (key.endsWith('$_currentMode')) {
@@ -183,6 +200,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   Widget _buildHeader() {
+    final (_, unit) = QuantityParser.parse(widget.product.packageSize);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Column(
@@ -198,11 +216,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               'Brand: ${widget.product.brand}',
               style: const TextStyle(fontSize: 16, color: Colors.black54),
             ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Row(
             children: [
+              const Text(
+                'Package Size: ',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
               Text(
-                'Package Size: ${widget.product.packageSize}',
+                widget.product.packageSize,
                 style: const TextStyle(fontSize: 16, color: Colors.black54),
               ),
               IconButton(
@@ -218,6 +240,41 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               ),
             ],
           ),
+          Row(
+            children: [
+              const Text(
+                'Remaining: ',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(
+                width: 80,
+                child: TextField(
+                  controller: _remainingGramsController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                  ],
+                  decoration: InputDecoration(
+                    suffixText: unit.isNotEmpty ? ' $unit' : ' g',
+                    isDense: true,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: _updateRemainingGrams,
+                icon: const Icon(
+                  Icons.check_circle_outline,
+                  size: 20,
+                  color: Colors.green,
+                ),
+                tooltip: 'Update Remaining Amount',
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -227,7 +284,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (_availableModes.length <= 1 || _currentMode == null) {
       return const SizedBox.shrink();
     }
-
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: Row(
