@@ -1,11 +1,17 @@
+// lib/pages/stats_page.dart
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../models/consumption_log.dart';
 import '../models/food_item.dart';
+import '../models/recipe_model.dart';
+import '../services/open_food_facts_api_service.dart';
 import '../utils/nutrient_helper.dart';
 import '../utils/recommended_intake_helper.dart';
 import '../widgets/macro_pie_chart.dart';
 import '../widgets/nutrients_progress_bar.dart';
+import 'product_detail_page.dart';
+import 'recipe_info.dart';
 
 class StatsPage extends StatelessWidget {
   final List<FoodItem> inventoryItems;
@@ -67,13 +73,72 @@ class StatsPage extends StatelessWidget {
         aggregatedMap[log.barcode]!['totalGrams'] += log.consumedGrams;
       } else {
         aggregatedMap[log.barcode] = {
+          'barcode': log.barcode,
           'productName': log.productName,
           'imageUrl': log.imageUrl,
           'totalGrams': log.consumedGrams,
+          'source': log.source,
         };
       }
     }
     return aggregatedMap.values.toList();
+  }
+
+  Future<void> _navigateToDetail(
+    BuildContext context,
+    Map<String, dynamic> log,
+  ) async {
+    final String? barcode = log['barcode'];
+    if (barcode == null) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      if (log['source'] != null) {
+        final recipeId = barcode.replaceAll('recipe_', '');
+        final source = log['source'] as RecipeSource;
+        final summary = RecipeSummary(
+          id: recipeId,
+          title: log['productName'],
+          image: log['imageUrl'],
+          source: source,
+        );
+        Navigator.pop(context);
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => RecipeInfoPage(recipeSummary: summary),
+          ),
+        );
+      } else {
+        final item = await OpenFoodFactsApiService.fetchFoodItem(barcode);
+        Navigator.pop(context);
+        if (item != null && context.mounted) {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  ProductDetailPage(product: item, showAddButton: false),
+            ),
+          );
+        } else if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not find details for this item.'),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Error loading details.')));
+    }
   }
 
   @override
@@ -195,10 +260,15 @@ class StatsPage extends StatelessWidget {
             }),
           ],
           _buildSectionHeader("Today's Meals"),
-          _buildMealExpansionTile('Breakfast', MealType.breakfast, meals),
-          _buildMealExpansionTile('Lunch', MealType.lunch, meals),
-          _buildMealExpansionTile('Dinner', MealType.dinner, meals),
-          _buildMealExpansionTile('Snacks', MealType.snack, meals),
+          _buildMealExpansionTile(
+            context,
+            'Breakfast',
+            MealType.breakfast,
+            meals,
+          ),
+          _buildMealExpansionTile(context, 'Lunch', MealType.lunch, meals),
+          _buildMealExpansionTile(context, 'Dinner', MealType.dinner, meals),
+          _buildMealExpansionTile(context, 'Snacks', MealType.snack, meals),
         ],
       ),
     );
@@ -215,6 +285,7 @@ class StatsPage extends StatelessWidget {
   }
 
   Widget _buildMealExpansionTile(
+    BuildContext context,
     String title,
     MealType mealType,
     Map<MealType, List<Map<String, dynamic>>> meals,
@@ -226,28 +297,27 @@ class StatsPage extends StatelessWidget {
     return ExpansionTile(
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
       initiallyExpanded: true,
-      children: logs
-          .map(
-            (log) => ListTile(
-              leading: SizedBox(
-                width: 40,
-                height: 40,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: CachedNetworkImage(
-                    imageUrl: log['imageUrl'],
-                    fit: BoxFit.cover,
-                    errorWidget: (context, url, error) =>
-                        const Icon(Icons.fastfood, color: Colors.grey),
-                  ),
-                ),
+      children: logs.map((log) {
+        return ListTile(
+          onTap: () => _navigateToDetail(context, log),
+          leading: SizedBox(
+            width: 40,
+            height: 40,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: CachedNetworkImage(
+                imageUrl: log['imageUrl'],
+                fit: BoxFit.cover,
+                errorWidget: (context, url, error) =>
+                    const Icon(Icons.fastfood, color: Colors.grey),
               ),
-              title: Text(log['productName']),
-              trailing: Text('${(log['totalGrams'] as double).round()}g'),
-              dense: true,
             ),
-          )
-          .toList(),
+          ),
+          title: Text(log['productName']),
+          trailing: Text('${(log['totalGrams'] as double).round()}g'),
+          dense: true,
+        );
+      }).toList(),
     );
   }
 }

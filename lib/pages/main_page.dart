@@ -234,6 +234,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       consumedDate: DateTime.now(),
       consumedNutrients: consumedNutrients,
       mealType: mealType,
+      source: recipe.source,
     );
 
     setState(() {

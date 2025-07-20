@@ -1,3 +1,5 @@
+import '../models/recipe_model.dart';
+
 enum MealType { breakfast, lunch, dinner, snack }
 
 class ConsumptionLog {
@@ -8,6 +10,7 @@ class ConsumptionLog {
   final DateTime consumedDate;
   final Map<String, double> consumedNutrients;
   final MealType mealType;
+  final RecipeSource? source; //To know if it's a recipe and from where
 
   ConsumptionLog({
     required this.barcode,
@@ -17,6 +20,7 @@ class ConsumptionLog {
     required this.consumedDate,
     required this.consumedNutrients,
     required this.mealType,
+    this.source,
   });
 
   Map<String, dynamic> toJson() {
@@ -28,6 +32,7 @@ class ConsumptionLog {
       'consumedDate': consumedDate.toIso8601String(),
       'consumedNutrients': consumedNutrients,
       'mealType': mealType.name,
+      'source': source?.name,
     };
   }
 
@@ -44,6 +49,9 @@ class ConsumptionLog {
         json['consumedNutrients'] ?? {},
       ),
       mealType: MealType.values.byName(json['mealType'] ?? 'snack'),
+      source: json['source'] != null
+          ? RecipeSource.values.byName(json['source'])
+          : null,
     );
   }
 }

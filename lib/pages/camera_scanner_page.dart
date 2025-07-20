@@ -1,11 +1,12 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:food/utils/quantity_parser.dart';
-import 'package:openfoodfacts/openfoodfacts.dart';
+/* import 'package:food/utils/quantity_parser.dart';
+import 'package:openfoodfacts/openfoodfacts.dart'; */
 import '../models/food_item.dart';
 import '../widgets/product_preview_widget.dart';
 import 'product_detail_page.dart';
+import '../services/open_food_facts_api_service.dart';
 
 class CameraScannerPage extends StatefulWidget {
   const CameraScannerPage({super.key});
@@ -75,7 +76,7 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   }
 
   Future<FoodItem?> _fetchProduct(String barcode) async {
-    try {
+    /* try {
       final ProductQueryConfiguration configuration = ProductQueryConfiguration(
         barcode,
         language: OpenFoodFactsLanguage.ENGLISH,
@@ -117,7 +118,8 @@ class _CameraScannerPageState extends State<CameraScannerPage>
     } catch (e) {
       debugPrint('Error fetching product: $e');
     }
-    return null;
+    return null; */
+    return await OpenFoodFactsApiService.fetchFoodItem(barcode);
   }
 
   void _processImage(CameraImage image) async {
