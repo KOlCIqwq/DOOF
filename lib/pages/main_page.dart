@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../models/consumption_log.dart';
 import '../models/food_item.dart';
+import '../models/recipe_model.dart';
 import '../services/consumption_storage.dart';
 import '../services/inventory_storage.dart';
 import '../widgets/consume_dialog.dart';
-import 'camera_scanner_page.dart';
 import 'inventory_page.dart';
-import 'stats_page.dart';
-import '../models/recipe_model.dart';
 import 'recipe_page.dart';
+import 'stats_page.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
+
   @override
   State<MainPage> createState() => _MainPageState();
 }
@@ -103,6 +102,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   ) {
     final Map<String, double> consumedNutrients = {};
     final nutrientsPer100g = item.nutriments;
+
     nutrientsPer100g.forEach((key, value) {
       if (key.endsWith('_100g') && value is num) {
         final nutrientName = key.replaceAll('_100g', '');
@@ -118,6 +118,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       consumedDate: DateTime.now(),
       consumedNutrients: consumedNutrients,
       mealType: mealType,
+      source: null,
     );
 
     setState(() {
@@ -142,23 +143,59 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     _showSuccessSnackbar('Consumption logged!');
   }
 
-  Future<void> _scanBarcodeAndAddItem() async {
-    final cameraPermission = await Permission.camera.request();
-    if (!cameraPermission.isGranted && mounted) {
-      _showErrorSnackbar('Camera permission is required');
-      return;
+  void _logRecipeConsumption(RecipeInfo recipe, MealType mealType) {
+    final Map<String, double> consumedNutrients = {};
+
+    if (recipe.nutrients.isNotEmpty) {
+      recipe.nutrients.forEach((name, amount) {
+        final key = _mapSpoonacularToOFF(name);
+        if (key != null) {
+          if (key == 'energy-kcal') {
+            consumedNutrients[key] = amount;
+          } else {
+            consumedNutrients[key] = amount;
+          }
+        }
+      });
     }
-    try {
-      final newItem = await Navigator.push<FoodItem>(
-        context,
-        MaterialPageRoute(builder: (context) => const CameraScannerPage()),
-      );
-      if (newItem != null) {
-        _addItemToInventory(newItem);
-      }
-    } catch (e) {
-      _showErrorSnackbar('Error scanning item: $e');
-    }
+
+    final log = ConsumptionLog(
+      barcode: 'recipe_${recipe.id}',
+      productName: recipe.title,
+      imageUrl: recipe.image,
+      consumedGrams: recipe.totalGrams,
+      consumedDate: DateTime.now(),
+      consumedNutrients: consumedNutrients,
+      mealType: mealType,
+      source: recipe.source,
+    );
+
+    setState(() {
+      _consumptionHistory.insert(0, log);
+      _pageController.jumpToPage(2);
+    });
+
+    _saveAllData();
+    _showSuccessSnackbar('${recipe.title} logged as ${mealType.name}!');
+  }
+
+  String? _mapSpoonacularToOFF(String name) {
+    final map = {
+      'Calories': 'energy-kcal',
+      'Fat': 'fat',
+      'Saturated Fat': 'saturated-fat',
+      'Carbohydrates': 'carbohydrates',
+      'Net Carbohydrates': 'carbohydrates',
+      'Sugar': 'sugars',
+      'Protein': 'proteins',
+      'Sodium': 'sodium',
+      'Fiber': 'fiber',
+      'Vitamin C': 'vitamin-c',
+      'Vitamin A': 'vitamin-a',
+      'Iron': 'iron',
+      'Calcium': 'calcium',
+    };
+    return map[name];
   }
 
   Future<void> _showConsumeDialog() async {
@@ -181,7 +218,9 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   }
 
   void _onPageChanged(int index) {
-    setState(() => _currentIndex = index);
+    setState(() {
+      _currentIndex = index;
+    });
   }
 
   void _onBottomNavTapped(int index) {
@@ -208,63 +247,6 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     }
   }
 
-  void _logRecipeConsumption(RecipeInfo recipe, MealType mealType) {
-    final Map<String, double> consumedNutrients = {};
-
-    if (recipe.nutrients.isNotEmpty) {
-      // Spoonacular provides nutrients per serving. We'll log them directly.
-      recipe.nutrients.forEach((name, amount) {
-        final key = _mapSpoonacularToOFF(name);
-        if (key != null) {
-          if (key == 'energy-kcal') {
-            consumedNutrients[key] = amount;
-          } else {
-            // All other Spoonacular nutrients are in grams, so no conversion needed
-            consumedNutrients[key] = amount;
-          }
-        }
-      });
-    }
-
-    final log = ConsumptionLog(
-      barcode: 'recipe_${recipe.id}',
-      productName: recipe.title,
-      imageUrl: recipe.image,
-      consumedGrams: recipe.totalGrams, // Use the calculated total grams
-      consumedDate: DateTime.now(),
-      consumedNutrients: consumedNutrients,
-      mealType: mealType,
-      source: recipe.source,
-    );
-
-    setState(() {
-      _consumptionHistory.insert(0, log);
-      _pageController.jumpToPage(2);
-    });
-
-    _saveAllData();
-    _showSuccessSnackbar('${recipe.title} logged as ${mealType.name}!');
-  }
-
-  String? _mapSpoonacularToOFF(String name) {
-    final map = {
-      'Calories': 'energy-kcal',
-      'Fat': 'fat',
-      'Saturated Fat': 'saturated-fat',
-      'Carbohydrates': 'carbohydrates',
-      'Net Carbohydrates': 'carbohydrates', // Often provided, map to same
-      'Sugar': 'sugars',
-      'Protein': 'proteins',
-      'Sodium': 'sodium',
-      'Fiber': 'fiber',
-      'Vitamin C': 'vitamin-c',
-      'Vitamin A': 'vitamin-a',
-      'Iron': 'iron',
-      'Calcium': 'calcium',
-    };
-    return map[name];
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -273,12 +255,12 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
           : PageView(
               controller: _pageController,
               onPageChanged: _onPageChanged,
+              physics: const BouncingScrollPhysics(),
               children: [
                 InventoryPage(
                   inventoryItems: _inventoryItems,
                   onAddItem: _addItemToInventory,
                   onUpdateInventory: _updateInventory,
-                  onScan: _scanBarcodeAndAddItem,
                 ),
                 RecipePage(onRecipeConsumed: _logRecipeConsumption),
                 StatsPage(
@@ -287,9 +269,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                 ),
               ],
             ),
-      floatingActionButton:
-          _currentIndex ==
-              2 // Stats page
+      floatingActionButton: _currentIndex == 2
           ? FloatingActionButton.extended(
               onPressed: _showConsumeDialog,
               label: const Text(
@@ -308,14 +288,17 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.inventory_2_outlined),
+            activeIcon: Icon(Icons.inventory_2),
             label: 'Inventory',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.menu_book_outlined),
+            activeIcon: Icon(Icons.menu_book),
             label: 'Recipes',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.pie_chart_outline),
+            activeIcon: Icon(Icons.pie_chart),
             label: 'Stats',
           ),
         ],
