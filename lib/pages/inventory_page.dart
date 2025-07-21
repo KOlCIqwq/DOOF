@@ -55,7 +55,8 @@ class _InventoryPageState extends State<InventoryPage>
     super.dispose();
   }
 
-  void _toggleFabMenu() {
+  // Toggle the floating action button menu open/close state
+  void toggleFabMenu() {
     setState(() {
       _isFabMenuOpen = !_isFabMenuOpen;
       if (_isFabMenuOpen) {
@@ -66,16 +67,18 @@ class _InventoryPageState extends State<InventoryPage>
     });
   }
 
-  void _openSearch() {
+  // Open the search overlay
+  void openSearch() {
     if (_isFabMenuOpen) {
-      _toggleFabMenu();
+      toggleFabMenu(); // Close FAB menu if open
     }
     setState(() {
       _isSearchVisible = true;
     });
   }
 
-  void _closeSearch() {
+  // Close the search overlay and clear results
+  void closeSearch() {
     setState(() {
       _isSearchVisible = false;
       _searchResults = [];
@@ -83,12 +86,15 @@ class _InventoryPageState extends State<InventoryPage>
     });
   }
 
-  Future<void> _scanBarcode() async {
+  // Scan a barcode using the camera
+  Future<void> scanBarcode() async {
     if (_isFabMenuOpen) {
-      _toggleFabMenu();
+      toggleFabMenu(); // Close FAB menu if open
     }
+    // Request camera permission
     final cameraPermission = await Permission.camera.request();
     if (!cameraPermission.isGranted && mounted) {
+      // Show snackbar if permission denied
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Camera permission is required')),
       );
@@ -96,6 +102,7 @@ class _InventoryPageState extends State<InventoryPage>
     }
 
     if (mounted) {
+      // Navigate to camera scanner page and get new item
       final newItem = await Navigator.push<FoodItem>(
         context,
         MaterialPageRoute(builder: (context) => const CameraScannerPage()),
@@ -106,14 +113,16 @@ class _InventoryPageState extends State<InventoryPage>
     }
   }
 
-  void _onSearchChanged(String query) {
+  // Handle search query changes with debounce
+  void onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), () {
-      _performSearch(query);
+      performSearch(query); // Perform search after debounce
     });
   }
 
-  Future<void> _performSearch(String query) async {
+  // Perform product search by name
+  Future<void> performSearch(String query) async {
     if (query.length < 2) {
       setState(() {
         _searchResults = [];
@@ -123,6 +132,7 @@ class _InventoryPageState extends State<InventoryPage>
     setState(() {
       _isSearching = true;
     });
+    // Call API to search products
     final results = await OpenFoodFactsApiService.searchProductsByName(query);
     if (mounted) {
       setState(() {
@@ -132,8 +142,10 @@ class _InventoryPageState extends State<InventoryPage>
     }
   }
 
-  Future<void> _showDeleteDialog(BuildContext context, int index) async {
+  // Show dialog to delete a specific quantity of an item
+  Future<void> showDeleteDialog(BuildContext context, int index) async {
     final item = widget.inventoryItems[index];
+    // Show delete quantity dialog
     final double? gramsToDelete = await showDialog<double>(
       context: context,
       builder: (context) => DeleteQuantity(item: item),
@@ -142,15 +154,19 @@ class _InventoryPageState extends State<InventoryPage>
       final newGrams = item.inventoryGrams - gramsToDelete;
       List<FoodItem> updatedList = List.from(widget.inventoryItems);
       if (newGrams > 0.1) {
+        // Update item with new grams
         updatedList[index] = item.copyWith(inventoryGrams: newGrams);
       } else {
+        // Remove item if quantity is too low
         updatedList.removeAt(index);
       }
       widget.onUpdateInventory(updatedList);
     }
   }
 
-  Future<void> _clearAllInventory(BuildContext context) async {
+  // Show dialog to clear all inventory items
+  Future<void> clearAllInventory(BuildContext context) async {
+    // Confirm clear all action
     final bool? confirmClear = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -158,11 +174,11 @@ class _InventoryPageState extends State<InventoryPage>
         content: const Text('This action cannot be undone.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(context, false), // Cancel button
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(context, true), // Clear All button
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Clear All'),
           ),
@@ -170,8 +186,8 @@ class _InventoryPageState extends State<InventoryPage>
       ),
     );
     if (confirmClear == true) {
-      widget.onUpdateInventory([]);
-      await InventoryStorageService.clearInventory();
+      widget.onUpdateInventory([]); // Clear inventory list
+      await InventoryStorageService.clearInventory(); // Clear stored inventory
     }
   }
 
@@ -188,7 +204,7 @@ class _InventoryPageState extends State<InventoryPage>
           if (widget.inventoryItems.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.delete_sweep_outlined),
-              onPressed: () => _clearAllInventory(context),
+              onPressed: () => clearAllInventory(context), // Clear all inventory
               tooltip: 'Clear All',
             ),
         ],
@@ -196,16 +212,17 @@ class _InventoryPageState extends State<InventoryPage>
       body: Stack(
         children: [
           widget.inventoryItems.isEmpty
-              ? _buildEmptyState()
-              : _buildInventoryList(context),
-          if (_isSearchVisible) _buildSearchOverlay(),
+              ? buildEmptyState() // Display empty state
+              : buildInventoryList(context), // Display inventory list
+          if (_isSearchVisible) buildSearchOverlay(), // Display search overlay
         ],
       ),
-      floatingActionButton: _buildExpandingFab(),
+      floatingActionButton: buildExpandingFab(), // Expanding FAB
     );
   }
 
-  Widget _buildInventoryList(BuildContext context) {
+  // Build the list of inventory items
+  Widget buildInventoryList(BuildContext context) {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 80),
       itemCount: widget.inventoryItems.length,
@@ -225,6 +242,7 @@ class _InventoryPageState extends State<InventoryPage>
           margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           child: ListTile(
             onTap: () async {
+              // Navigate to product detail page
               final result = await Navigator.push<dynamic>(
                 context,
                 MaterialPageRoute(
@@ -233,6 +251,7 @@ class _InventoryPageState extends State<InventoryPage>
                 ),
               );
               if (result is Map && result['type'] == 'update') {
+                // Update item in inventory
                 final updatedItem = result['item'] as FoodItem;
                 final idx = widget.inventoryItems.indexWhere(
                   (i) => i.barcode == updatedItem.barcode,
@@ -243,13 +262,13 @@ class _InventoryPageState extends State<InventoryPage>
                   widget.onUpdateInventory(updatedList);
                 }
               } else if (result is FoodItem) {
-                widget.onAddItem(result);
+                widget.onAddItem(result); // Add new item to inventory
               }
             },
             leading: Hero(
-              tag: '${item.barcode}-${item.packageSize}',
+              tag: '${item.barcode}-${item.packageSize}', // Hero animation tag
               child: CachedNetworkImage(
-                imageUrl: item.imageUrl,
+                imageUrl: item.imageUrl, // Product image URL
                 width: 50,
                 height: 50,
                 fit: BoxFit.cover,
@@ -268,12 +287,12 @@ class _InventoryPageState extends State<InventoryPage>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Chip(
-                  label: Text('x${item.displayQuantity.toStringAsFixed(1)}'),
+                  label: Text('x${item.displayQuantity.toStringAsFixed(1)}'), // Display quantity chip
                   backgroundColor: Colors.grey.shade200,
                 ),
                 IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  onPressed: () => _showDeleteDialog(context, index),
+                  icon: const Icon(Icons.delete_outline, color: Colors.red), // Delete icon
+                  onPressed: () => showDeleteDialog(context, index), // Show delete dialog
                 ),
               ],
             ),
@@ -283,12 +302,13 @@ class _InventoryPageState extends State<InventoryPage>
     );
   }
 
-  Widget _buildEmptyState() {
+  // Build the empty state widget when inventory is empty
+  Widget buildEmptyState() {
     return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.inbox_outlined, size: 80, color: Colors.grey),
+          Icon(Icons.inbox_outlined, size: 80, color: Colors.grey), // Empty inbox icon
           SizedBox(height: 20),
           Text(
             'Your inventory is empty',
@@ -305,13 +325,14 @@ class _InventoryPageState extends State<InventoryPage>
     );
   }
 
-  Widget _buildSearchOverlay() {
+  // Build the search overlay widget
+  Widget buildSearchOverlay() {
     return Stack(
       children: [
         GestureDetector(
-          onTap: _closeSearch,
+          onTap: closeSearch, // Close search on tap outside
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5), // Blur background
             child: Container(color: Colors.black.withOpacity(0.3)),
           ),
         ),
@@ -331,7 +352,7 @@ class _InventoryPageState extends State<InventoryPage>
                       prefixIcon: const Icon(Icons.search),
                       suffixIcon: IconButton(
                         icon: const Icon(Icons.close),
-                        onPressed: _closeSearch,
+                        onPressed: closeSearch, // Close search button
                       ),
                       filled: true,
                       fillColor: Colors.white,
@@ -340,13 +361,13 @@ class _InventoryPageState extends State<InventoryPage>
                         borderSide: BorderSide.none,
                       ),
                     ),
-                    onChanged: _onSearchChanged,
+                    onChanged: onSearchChanged, // Handle search query changes
                   ),
                 ),
               ),
               Expanded(
                 child: _isSearching
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const Center(child: CircularProgressIndicator()) // Loading indicator
                     : ListView.builder(
                         itemCount: _searchResults.length,
                         itemBuilder: (context, index) {
@@ -358,17 +379,17 @@ class _InventoryPageState extends State<InventoryPage>
                             ),
                             child: ListTile(
                               leading: CachedNetworkImage(
-                                imageUrl: item.imageUrl,
+                                imageUrl: item.imageUrl, // Product image
                                 width: 50,
                                 height: 50,
                                 fit: BoxFit.cover,
                                 errorWidget: (c, u, e) =>
                                     const Icon(Icons.fastfood),
                               ),
-                              title: Text(item.name),
-                              subtitle: Text(item.brand),
+                              title: Text(item.name), // Product name
+                              subtitle: Text(item.brand), // Product brand
                               onTap: () async {
-                                _closeSearch();
+                                closeSearch(); // Close search on item tap
                                 final result = await Navigator.push<FoodItem>(
                                   context,
                                   MaterialPageRoute(
@@ -379,7 +400,7 @@ class _InventoryPageState extends State<InventoryPage>
                                   ),
                                 );
                                 if (result != null) {
-                                  widget.onAddItem(result);
+                                  widget.onAddItem(result); // Add item to inventory
                                 }
                               },
                             ),
@@ -394,7 +415,8 @@ class _InventoryPageState extends State<InventoryPage>
     );
   }
 
-  Widget _buildExpandingFab() {
+  // Build the expanding floating action button
+  Widget buildExpandingFab() {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -407,8 +429,8 @@ class _InventoryPageState extends State<InventoryPage>
               padding: const EdgeInsets.only(bottom: 16.0),
               child: FloatingActionButton.small(
                 heroTag: 'search',
-                onPressed: _openSearch,
-                child: const Icon(Icons.search),
+                onPressed: openSearch, // Open search
+                child: const Icon(Icons.search), // Search icon
               ),
             ),
           ),
@@ -421,15 +443,15 @@ class _InventoryPageState extends State<InventoryPage>
               padding: const EdgeInsets.only(bottom: 16.0),
               child: FloatingActionButton.small(
                 heroTag: 'scan',
-                onPressed: _scanBarcode,
-                child: const Icon(Icons.qr_code_scanner),
+                onPressed: scanBarcode, // Scan barcode
+                child: const Icon(Icons.qr_code_scanner), // Scan icon
               ),
             ),
           ),
         ),
         FloatingActionButton(
           heroTag: 'main',
-          onPressed: _toggleFabMenu,
+          onPressed: toggleFabMenu, // Toggle FAB menu
           child: AnimatedIcon(
             icon: AnimatedIcons.menu_close,
             progress: _fabAnimationController,

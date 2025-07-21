@@ -39,7 +39,7 @@ class _CameraScannerPageState extends State<CameraScannerPage>
         Tween<Offset>(begin: const Offset(0, 1.5), end: Offset.zero).animate(
           CurvedAnimation(parent: _slideController, curve: Curves.easeOutBack),
         );
-    WidgetsBinding.instance.addPostFrameCallback((_) => _initializeCamera());
+    WidgetsBinding.instance.addPostFrameCallback((_) => initializeCamera());
   }
 
   @override
@@ -50,13 +50,15 @@ class _CameraScannerPageState extends State<CameraScannerPage>
     super.dispose();
   }
 
-  Future<void> _initializeCamera() async {
+  // Initialize the camera for scanning
+  Future<void> initializeCamera() async {
     try {
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
         setState(() => _errorMessage = 'No cameras found');
         return;
       }
+      // Select the first available camera
       _controller = CameraController(
         cameras.first,
         ResolutionPreset.high,
@@ -67,7 +69,8 @@ class _CameraScannerPageState extends State<CameraScannerPage>
       if (!mounted) return;
       setState(() => _isInitialized = true);
       await _controller!.setFocusMode(FocusMode.auto);
-      await _controller!.startImageStream(_processImage);
+      // Start image stream for barcode processing
+      await _controller!.startImageStream(processImage);
     } catch (e) {
       if (mounted) {
         setState(() => _errorMessage = 'Failed to initialize camera: $e');
@@ -75,60 +78,20 @@ class _CameraScannerPageState extends State<CameraScannerPage>
     }
   }
 
-  Future<FoodItem?> _fetchProduct(String barcode) async {
-    /* try {
-      final ProductQueryConfiguration configuration = ProductQueryConfiguration(
-        barcode,
-        language: OpenFoodFactsLanguage.ENGLISH,
-        fields: [ProductField.ALL],
-        version: ProductQueryVersion.v3,
-      );
-      final ProductResultV3 result = await OpenFoodAPIClient.getProductV3(
-        configuration,
-      );
-
-      if (result.status == ProductResultV3.statusSuccess &&
-          result.product != null) {
-        final product = result.product!;
-        final nutrimentsJson = product.nutriments?.toJson() ?? {};
-
-        final packageSize = product.quantity?.isNotEmpty == true
-            ? product.quantity!
-            : '100 g';
-        final initialGrams = QuantityParser.toGrams(
-          QuantityParser.parse(packageSize),
-        );
-
-        return FoodItem(
-          barcode: barcode,
-          name: product.productName ?? 'N/A',
-          brand: product.brands ?? 'N/A',
-          imageUrl: product.imageFrontUrl ?? '',
-          insertDate: DateTime.now(),
-          packageSize: packageSize,
-          inventoryGrams: initialGrams > 0 ? initialGrams : 100.0,
-          nutriments: nutrimentsJson,
-          fat: (nutrimentsJson['fat_100g'] as num?)?.toDouble() ?? 0.0,
-          carbs:
-              (nutrimentsJson['carbohydrates_100g'] as num?)?.toDouble() ?? 0.0,
-          protein: (nutrimentsJson['proteins_100g'] as num?)?.toDouble() ?? 0.0,
-          isKnown: true,
-        );
-      }
-    } catch (e) {
-      debugPrint('Error fetching product: $e');
-    }
-    return null; */
+  // Fetch product details from Open Food Facts API
+  Future<FoodItem?> fetchProduct(String barcode) async {
     return await OpenFoodFactsApiService.fetchFoodItem(barcode);
   }
 
-  void _processImage(CameraImage image) async {
+  // Process camera image frames for barcode detection
+  void processImage(CameraImage image) async {
     if (_isHandlingResult || _isProcessing) return;
     _frameSkipCounter++;
-    if (_frameSkipCounter % 5 != 0) return;
+    if (_frameSkipCounter % 5 != 0) return; // Process every 5th frame
     _isProcessing = true;
 
     try {
+      // Invoke native method to scan barcode
       final String? barcode = await platform.invokeMethod('scanBarcode', {
         'planes': image.planes
             .map((p) => {'bytes': p.bytes, 'bytesPerRow': p.bytesPerRow})
@@ -139,10 +102,11 @@ class _CameraScannerPageState extends State<CameraScannerPage>
 
       if (barcode != null && barcode.isNotEmpty && mounted) {
         setState(() => _isHandlingResult = true);
-        HapticFeedback.lightImpact();
+        HapticFeedback.lightImpact(); // Provide haptic feedback
 
-        FoodItem? product = await _fetchProduct(barcode);
+        FoodItem? product = await fetchProduct(barcode);
 
+        // Create unknown product if not found
         product ??= FoodItem(
           barcode: barcode,
           name: 'Unknown Product',
@@ -160,7 +124,7 @@ class _CameraScannerPageState extends State<CameraScannerPage>
 
         if (!mounted) return;
         setState(() => _scannedProduct = product);
-        _slideController.forward();
+        _slideController.forward(); // Animate product preview in
       }
     } catch (e) {
       debugPrint('Error processing image: $e');
@@ -169,7 +133,8 @@ class _CameraScannerPageState extends State<CameraScannerPage>
     }
   }
 
-  void _resetScanner() {
+  // Reset the scanner state and clear scanned product
+  void resetScanner() {
     if (mounted) {
       setState(() {
         _scannedProduct = null;
@@ -178,15 +143,18 @@ class _CameraScannerPageState extends State<CameraScannerPage>
     }
   }
 
-  void _addToInventory() {
+  // Add the scanned product to inventory and navigate back
+  void addToInventory() {
     if (_scannedProduct != null) Navigator.pop(context, _scannedProduct);
   }
 
-  void _dismissPreviewAndRescan() {
-    _slideController.reverse().then((_) => _resetScanner());
+  // Dismiss product preview and restart scanning
+  void dismissPreviewAndRescan() {
+    _slideController.reverse().then((_) => resetScanner());
   }
 
-  void _viewDetails() async {
+  // View details of the scanned product
+  void viewDetails() async {
     if (_scannedProduct == null) return;
     final result = await Navigator.push<FoodItem>(
       context,
@@ -198,14 +166,15 @@ class _CameraScannerPageState extends State<CameraScannerPage>
     if (result != null && mounted) Navigator.pop(context, result);
   }
 
-  Future<void> _toggleFlash() async {
+  // Toggle camera flash on/off
+  Future<void> toggleFlash() async {
     if (_controller == null) return;
     try {
       final newMode = _controller!.value.flashMode == FlashMode.torch
           ? FlashMode.off
           : FlashMode.torch;
       await _controller!.setFlashMode(newMode);
-      if (mounted) setState(() {});
+      if (mounted) setState(() {}); // Update UI
     } catch (e) {
       debugPrint('Error toggling flash: $e');
     }
@@ -218,10 +187,13 @@ class _CameraScannerPageState extends State<CameraScannerPage>
       body: Stack(
         fit: StackFit.expand,
         children: [
+          // Camera preview
           if (_isInitialized && _controller != null)
             CameraPreview(_controller!),
+          // Scanner overlay UI
           if (_isInitialized)
             CustomPaint(painter: ScannerOverlayPainter(), size: Size.infinite),
+          // Loading indicator while fetching product
           if (_isHandlingResult && _scannedProduct == null)
             Container(
               color: Colors.black.withOpacity(0.5),
@@ -239,8 +211,11 @@ class _CameraScannerPageState extends State<CameraScannerPage>
                 ),
               ),
             ),
-          if (!_isInitialized || _errorMessage != null) _buildStatusView(),
-          if (_isInitialized) _buildTopControls(),
+          // Status view (error or initializing)
+          if (!_isInitialized || _errorMessage != null) buildStatusView(),
+          // Top control buttons (close, flash)
+          if (_isInitialized) buildTopControls(),
+          // Product preview widget
           if (_scannedProduct != null)
             Positioned(
               bottom: 0,
@@ -250,18 +225,20 @@ class _CameraScannerPageState extends State<CameraScannerPage>
                 position: _slideAnimation,
                 child: ProductPreviewWidget(
                   product: _scannedProduct!,
-                  onAddToInventory: _addToInventory,
-                  onViewDetails: _viewDetails,
+                  onAddToInventory: addToInventory,
+                  onViewDetails: viewDetails,
                 ),
               ),
             ),
-          _buildRescanButton(),
+          // Rescan button
+          buildRescanButton(),
         ],
       ),
     );
   }
 
-  Widget _buildTopControls() {
+  // Build top control buttons (close, flash)
+  Widget buildTopControls() {
     return Positioned(
       top: MediaQuery.of(context).padding.top + 8,
       left: 0,
@@ -269,19 +246,20 @@ class _CameraScannerPageState extends State<CameraScannerPage>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _iconButton(Icons.close, () => Navigator.pop(context)),
-          _iconButton(
+          iconButton(Icons.close, () => Navigator.pop(context)), // Close button
+          iconButton(
             _controller?.value.flashMode == FlashMode.torch
                 ? Icons.flash_on
                 : Icons.flash_off,
-            _toggleFlash,
+            toggleFlash, // Toggle flash button
           ),
         ],
       ),
     );
   }
 
-  Widget _iconButton(IconData icon, VoidCallback onPressed) {
+  // Helper widget for an icon button
+  Widget iconButton(IconData icon, VoidCallback onPressed) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: const BoxDecoration(
@@ -295,7 +273,8 @@ class _CameraScannerPageState extends State<CameraScannerPage>
     );
   }
 
-  Widget _buildRescanButton() {
+  // Build the rescan button
+  Widget buildRescanButton() {
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeOutCubic,
@@ -304,7 +283,7 @@ class _CameraScannerPageState extends State<CameraScannerPage>
       right: 0,
       child: Center(
         child: FloatingActionButton.extended(
-          onPressed: _dismissPreviewAndRescan,
+          onPressed: dismissPreviewAndRescan, // Dismiss preview and rescan
           label: const Text('Scan Again'),
           icon: const Icon(Icons.refresh),
           backgroundColor: Colors.white,
@@ -314,7 +293,8 @@ class _CameraScannerPageState extends State<CameraScannerPage>
     );
   }
 
-  Widget _buildStatusView() {
+  // Build the status view (initializing or error message)
+  Widget buildStatusView() {
     return Container(
       color: Colors.black,
       child: Center(
