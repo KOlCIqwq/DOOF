@@ -187,6 +187,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       consumedNutrients: consumedNutrients,
       mealType: mealType,
       source: null,
+      categories: item.categories,
+      expirationDate: item.expirationDate,
     );
     setState(() {
       _consumptionHistory.insert(0, log);
@@ -240,7 +242,9 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       _pageController.jumpToPage(2);
     });
     _saveAllData(); // Persist changes
-    _showSuccessSnackbar('${recipe.title} logged as ${mealType.name}!'); // Show success
+    _showSuccessSnackbar(
+      '${recipe.title} logged as ${mealType.name}!',
+    ); // Show success
   }
 
   // Map Spoonacular nutrient names to Open Food Facts keys
@@ -322,7 +326,9 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator()) // Loading indicator
+          ? const Center(
+              child: CircularProgressIndicator(),
+            ) // Loading indicator
           : PageView(
               controller: _pageController,
               onPageChanged: _onPageChanged,

@@ -6,8 +6,9 @@ class FoodItem {
   final String brand;
   final String imageUrl;
   final DateTime insertDate;
-  final DateTime? expireDate;
-  final Map<String, dynamic> nutriments;
+  final DateTime? expirationDate; // The expiration date of the product
+  final String categories; // Product categories
+  final Map<String, dynamic> nutriments; // Map of nutriment values
   final double fat;
   final double carbs;
   final double protein;
@@ -21,7 +22,8 @@ class FoodItem {
     required this.brand,
     required this.imageUrl,
     required this.insertDate,
-    this.expireDate,
+    this.expirationDate,
+    required this.categories,
     required this.nutriments,
     required this.fat,
     required this.carbs,
@@ -31,12 +33,14 @@ class FoodItem {
     this.isKnown = true,
   });
 
+  // The weight in grams of a single, standard package of this item.
   double get gramsPerUnit {
     final (value, unit) = QuantityParser.parse(packageSize);
     if (value <= 0) return 100.0;
     return QuantityParser.toGrams((value, unit));
   }
 
+  // The calculated quantity available, as a decimal (e.g., 2.5 units).
   double get displayQuantity {
     final gpu = gramsPerUnit;
     if (gpu <= 0) return 0.0;
@@ -49,7 +53,8 @@ class FoodItem {
     String? brand,
     String? imageUrl,
     DateTime? insertDate,
-    DateTime? expireDate,
+    DateTime? expirationDate,
+    String? categories,
     Map<String, dynamic>? nutriments,
     double? fat,
     double? carbs,
@@ -64,7 +69,8 @@ class FoodItem {
       brand: brand ?? this.brand,
       imageUrl: imageUrl ?? this.imageUrl,
       insertDate: insertDate ?? this.insertDate,
-      expireDate: expireDate ?? this.expireDate,
+      expirationDate: expirationDate ?? this.expirationDate,
+      categories: categories ?? this.categories,
       nutriments: nutriments ?? this.nutriments,
       fat: fat ?? this.fat,
       carbs: carbs ?? this.carbs,
@@ -82,7 +88,8 @@ class FoodItem {
       'brand': brand,
       'imageUrl': imageUrl,
       'insertDate': insertDate.toIso8601String(),
-      'expireDate': expireDate?.toIso8601String(),
+      'expirationDate': expirationDate?.toIso8601String(),
+      'categories': categories,
       'nutriments': nutriments,
       'fat': fat,
       'carbs': carbs,
@@ -112,9 +119,10 @@ class FoodItem {
       insertDate: DateTime.parse(
         json['insertDate'] ?? DateTime.now().toIso8601String(),
       ),
-      expireDate: json['expireDate'] != null
-          ? DateTime.parse(json['expireDate'])
+      expirationDate: json['expirationDate'] != null
+          ? DateTime.parse(json['expirationDate'])
           : null,
+      categories: json['categories'] ?? '',
       nutriments: Map<String, dynamic>.from(json['nutriments'] ?? {}),
       fat: (json['fat'] as num?)?.toDouble() ?? 0.0,
       carbs: (json['carbs'] as num?)?.toDouble() ?? 0.0,

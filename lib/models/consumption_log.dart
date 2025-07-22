@@ -11,6 +11,8 @@ class ConsumptionLog {
   final Map<String, double> consumedNutrients;
   final MealType mealType;
   final RecipeSource? source; //To know if it's a recipe and from where
+  final String? categories;
+  final DateTime? expirationDate;
 
   ConsumptionLog({
     required this.barcode,
@@ -21,6 +23,8 @@ class ConsumptionLog {
     required this.consumedNutrients,
     required this.mealType,
     this.source,
+    this.categories,
+    this.expirationDate,
   });
 
   Map<String, dynamic> toJson() {
@@ -33,6 +37,8 @@ class ConsumptionLog {
       'consumedNutrients': consumedNutrients,
       'mealType': mealType.name,
       'source': source?.name,
+      'categories': categories,
+      'expirationDate': expirationDate?.toIso8601String(),
     };
   }
 
@@ -51,6 +57,10 @@ class ConsumptionLog {
       mealType: MealType.values.byName(json['mealType'] ?? 'snack'),
       source: json['source'] != null
           ? RecipeSource.values.byName(json['source'])
+          : null,
+      categories: json['categories'],
+      expirationDate: json['expirationDate'] != null
+          ? DateTime.parse(json['expirationDate'])
           : null,
     );
   }

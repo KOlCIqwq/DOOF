@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import '../models/food_item.dart';
 import '../utils/nutrient_helper.dart';
 import '../utils/quantity_parser.dart';
@@ -68,26 +69,29 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       builder: (_) =>
           AdjustPackageSizeDialog(initialValue: widget.product.packageSize),
     );
-
     if (newSize != null && newSize.isNotEmpty && mounted) {
       final newGramsPerUnit = QuantityParser.toGrams(
         QuantityParser.parse(newSize),
       );
-      // Reset the remaining grams to the new full package size
       final updatedItem = widget.product.copyWith(
         packageSize: newSize,
         inventoryGrams: newGramsPerUnit,
       );
-
       Navigator.pop(context, {'type': 'update', 'item': updatedItem});
     }
   }
 
   void _updateRemainingGrams() {
     final newGrams = double.tryParse(_remainingGramsController.text);
-    if (newGrams != null) {
+    if (newGrams != null && newGrams != widget.product.inventoryGrams) {
       final updatedItem = widget.product.copyWith(inventoryGrams: newGrams);
       Navigator.pop(context, {'type': 'update', 'item': updatedItem});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Remaining amount updated!'),
+          backgroundColor: Colors.green,
+        ),
+      );
     }
   }
 
@@ -123,7 +127,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Widget build(BuildContext context) {
     final currentNutrients = _getNutrientsForCurrentMode();
     final nutrientLists = NutrientHelper.getNutrientLists(currentNutrients);
-
     final calories = num.tryParse(currentNutrients['energy-kcal'] ?? '0') ?? 0;
     final carbs = num.tryParse(currentNutrients['carbohydrates'] ?? '0') ?? 0.0;
     final protein = num.tryParse(currentNutrients['proteins'] ?? '0') ?? 0.0;
@@ -217,6 +220,24 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               style: const TextStyle(fontSize: 16, color: Colors.black54),
             ),
           const SizedBox(height: 8),
+          if (widget.product.categories.isNotEmpty) ...[
+            Text(
+              'Category: ${widget.product.categories}',
+              style: const TextStyle(fontSize: 16, color: Colors.black54),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (widget.product.expirationDate != null) ...[
+            Text(
+              'Expires On: ${DateFormat.yMd().format(widget.product.expirationDate!)}',
+              style: const TextStyle(
+                fontSize: 16,
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           Row(
             children: [
               const Text(
@@ -499,6 +520,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   nutriments: const {},
                   packageSize: '',
                   inventoryGrams: 100.0,
+                  categories: '',
+                  expirationDate: null,
                 );
                 Navigator.pop(context, manualItem);
               },

@@ -120,6 +120,8 @@ class _CameraScannerPageState extends State<CameraScannerPage>
           carbs: 0.0,
           protein: 0.0,
           isKnown: false,
+          categories: '',
+          expirationDate: null,
         );
 
         if (!mounted) return;

@@ -1,7 +1,6 @@
-// lib/pages/stats_page.dart
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/consumption_log.dart';
 import '../models/daily_stats_summary.dart';
 import '../models/food_item.dart';
@@ -27,21 +26,17 @@ class StatsPage extends StatelessWidget {
     required this.dailySummaries,
   });
 
-  // Get today's consumption logs
+  // Get today's consumption logs from the history.
   List<ConsumptionLog> getTodaysConsumption() {
-    // Current date and time
     final now = DateTime.now();
-    // Start of the current day
     final startOfDay = DateTime(now.year, now.month, now.day);
-    // Filter consumption history for today's logs
     return consumptionHistory
         .where((log) => log.consumedDate.isAfter(startOfDay))
         .toList();
   }
 
-  // Calculate today's nutrient totals
+  // Sum all nutrients from a list of consumption logs.
   Map<String, double> getTodaysNutrientTotals(List<ConsumptionLog> todaysLogs) {
-    // Initialize totals map
     final Map<String, double> totals = {};
     for (final log in todaysLogs) {
       log.consumedNutrients.forEach((key, value) {
@@ -55,19 +50,16 @@ class StatsPage extends StatelessWidget {
     return totals;
   }
 
-  // Calculate macro totals for inventory
+  // Calculate total macronutrients (carbs, protein, fat) from inventory items.
   Map<String, double> getMacroTotals(List<FoodItem> items) {
     double totalCarbs = 0;
     double totalProtein = 0;
     double totalFat = 0;
     for (final item in items) {
-      // Carbohydrates per 100g
       final carbsPer100g =
           (item.nutriments['carbohydrates_100g'] as num?)?.toDouble() ?? 0;
-      // Protein per 100g
       final proteinPer100g =
           (item.nutriments['proteins_100g'] as num?)?.toDouble() ?? 0;
-      // Fat per 100g
       final fatPer100g = (item.nutriments['fat_100g'] as num?)?.toDouble() ?? 0;
       totalCarbs += (carbsPer100g / 100) * item.inventoryGrams;
       totalProtein += (proteinPer100g / 100) * item.inventoryGrams;
@@ -76,7 +68,7 @@ class StatsPage extends StatelessWidget {
     return {'carbs': totalCarbs, 'protein': totalProtein, 'fat': totalFat};
   }
 
-  // Aggregate meal logs by barcode
+  // Groups consumed items by barcode to sum their weights.
   List<Map<String, dynamic>> aggregateMealLogs(List<ConsumptionLog> logs) {
     final Map<String, Map<String, dynamic>> aggregatedMap = {};
     for (final log in logs) {
@@ -89,20 +81,21 @@ class StatsPage extends StatelessWidget {
           'imageUrl': log.imageUrl,
           'totalGrams': log.consumedGrams,
           'source': log.source,
+          'categories': log.categories,
+          'expirationDate': log.expirationDate,
         };
       }
     }
     return aggregatedMap.values.toList();
   }
 
-  // Navigate to product or recipe detail page
+  // Handles tap events on consumed items to show their details.
   Future<void> navigateToDetail(
     BuildContext context,
     Map<String, dynamic> log,
   ) async {
     final String? barcode = log['barcode'];
     if (barcode == null) return;
-    // Show loading indicator
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -110,7 +103,6 @@ class StatsPage extends StatelessWidget {
     );
     try {
       if (log['source'] != null) {
-        // Handle recipe navigation
         final recipeId = barcode.replaceAll('recipe_', '');
         final source = log['source'] as RecipeSource;
         final summary = RecipeSummary(
@@ -119,7 +111,7 @@ class StatsPage extends StatelessWidget {
           image: log['imageUrl'],
           source: source,
         );
-        Navigator.pop(context); // Close loading indicator
+        Navigator.pop(context);
         await Navigator.push(
           context,
           MaterialPageRoute(
@@ -127,9 +119,8 @@ class StatsPage extends StatelessWidget {
           ),
         );
       } else {
-        // Fetch food item details
         final item = await OpenFoodFactsApiService.fetchFoodItem(barcode);
-        Navigator.pop(context); // Close loading indicator
+        Navigator.pop(context);
         if (item != null && context.mounted) {
           await Navigator.push(
             context,
@@ -139,7 +130,6 @@ class StatsPage extends StatelessWidget {
             ),
           );
         } else if (context.mounted) {
-          // Show error message
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Could not find details for this item.'),
@@ -148,7 +138,7 @@ class StatsPage extends StatelessWidget {
         }
       }
     } catch (e) {
-      Navigator.pop(context); // Close loading indicator on error
+      Navigator.pop(context);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Error loading details.')));
@@ -157,17 +147,12 @@ class StatsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Get today's consumption logs
     final todaysLogs = getTodaysConsumption();
-    // Calculate today's nutrient totals
     final todaysNutrients = getTodaysNutrientTotals(todaysLogs);
-    // Calculate inventory macro totals
     final inventoryMacros = getMacroTotals(inventoryItems);
-    // Consumed macronutrients
     final consumedCarbs = todaysNutrients['carbohydrates'] ?? 0;
     final consumedProtein = todaysNutrients['proteins'] ?? 0;
     final consumedFat = todaysNutrients['fat'] ?? 0;
-    // Group meals by type
     final Map<MealType, List<Map<String, dynamic>>> meals = {
       MealType.breakfast: aggregateMealLogs(
         todaysLogs.where((l) => l.mealType == MealType.breakfast).toList(),
@@ -182,11 +167,9 @@ class StatsPage extends StatelessWidget {
         todaysLogs.where((l) => l.mealType == MealType.snack).toList(),
       ),
     };
-    // Primary nutrient keys for display
     final primaryNutrientKeys = RecommendedIntakeHelper.dailyValues.keys
         .map((key) => NutrientHelper.getOpenFoodFactsKey(key))
         .toSet();
-    // Other nutrients with values greater than zero
     final otherNutrients = todaysNutrients.entries
         .where(
           (entry) =>
@@ -205,7 +188,6 @@ class StatsPage extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.history),
             onPressed: () {
-              // Navigate to history page
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -227,7 +209,6 @@ class StatsPage extends StatelessWidget {
               Expanded(
                 child: Column(
                   children: [
-                    // Inventory title
                     const Text(
                       'Inventory',
                       style: TextStyle(
@@ -235,7 +216,6 @@ class StatsPage extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    // Inventory macro pie chart
                     SizedBox(
                       height: 150,
                       child: MacroPieChart(
@@ -251,7 +231,6 @@ class StatsPage extends StatelessWidget {
               Expanded(
                 child: Column(
                   children: [
-                    // Consumed today title
                     const Text(
                       'Consumed Today',
                       style: TextStyle(
@@ -259,7 +238,6 @@ class StatsPage extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    // Consumed today macro pie chart
                     SizedBox(
                       height: 150,
                       child: MacroPieChart(
@@ -273,9 +251,7 @@ class StatsPage extends StatelessWidget {
               ),
             ],
           ),
-          // Intake goals section
           buildSectionHeader("Daily Intake Goals"),
-          // Nutrient progress bars
           ...RecommendedIntakeHelper.dailyValues.entries.map((entry) {
             final nutrientKey = NutrientHelper.getOpenFoodFactsKey(entry.key);
             return NutrientProgressBar(
@@ -286,9 +262,7 @@ class StatsPage extends StatelessWidget {
             );
           }),
           if (otherNutrients.isNotEmpty) ...[
-            // Other nutrients section header
             buildSectionHeader("Other Nutrients"),
-            // List other nutrients
             ...otherNutrients.map((entry) {
               final info = NutrientHelper.getInfo(entry.key);
               return ListTile(
@@ -300,27 +274,22 @@ class StatsPage extends StatelessWidget {
               );
             }),
           ],
-          // Meals section header
           buildSectionHeader("Today's Meals"),
-          // Breakfast expansion tile
           buildMealExpansionTile(
             context,
             'Breakfast',
             MealType.breakfast,
             meals,
           ),
-          // Lunch expansion tile
           buildMealExpansionTile(context, 'Lunch', MealType.lunch, meals),
-          // Dinner expansion tile
           buildMealExpansionTile(context, 'Dinner', MealType.dinner, meals),
-          // Snacks expansion tile
           buildMealExpansionTile(context, 'Snacks', MealType.snack, meals),
         ],
       ),
     );
   }
 
-  // Build section header widget
+  // A reusable widget for section headers.
   Widget buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.only(top: 24.0, bottom: 8.0),
@@ -331,7 +300,7 @@ class StatsPage extends StatelessWidget {
     );
   }
 
-  // Build meal expansion tile widget
+  // A reusable widget for the expandable meal sections.
   Widget buildMealExpansionTile(
     BuildContext context,
     String title,
@@ -346,23 +315,34 @@ class StatsPage extends StatelessWidget {
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
       initiallyExpanded: true,
       children: logs.map((log) {
+        final List<String> subtitles = [];
+        if (log['categories'] != null &&
+            (log['categories'] as String).isNotEmpty) {
+          subtitles.add(log['categories']);
+        }
+        if (log['expirationDate'] != null) {
+          final date = log['expirationDate'] as DateTime;
+          subtitles.add('Expires: ${DateFormat.yMd().format(date)}');
+        }
+
         return ListTile(
-          onTap: () => navigateToDetail(context, log), // Product/recipe detail
+          onTap: () => navigateToDetail(context, log),
           leading: SizedBox(
             width: 40,
             height: 40,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: CachedNetworkImage(
-                imageUrl: log['imageUrl'], // Product image
+                imageUrl: log['imageUrl'],
                 fit: BoxFit.cover,
                 errorWidget: (context, url, error) =>
                     const Icon(Icons.fastfood, color: Colors.grey),
               ),
             ),
           ),
-          title: Text(log['productName']), // Product name
-          trailing: Text('${(log['totalGrams'] as double).round()}g'), // Grams
+          title: Text(log['productName']),
+          subtitle: subtitles.isNotEmpty ? Text(subtitles.join(' | ')) : null,
+          trailing: Text('${(log['totalGrams'] as double).round()}g'),
           dense: true,
         );
       }).toList(),
