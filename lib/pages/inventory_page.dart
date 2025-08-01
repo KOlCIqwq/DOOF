@@ -6,7 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../models/food_item.dart';
 import '../services/inventory_storage.dart';
 import '../services/open_food_facts_api_service.dart';
-import '../utils/quantity_parser.dart';
+//import '../utils/quantity_parser.dart';
 import '../widgets/delete_quantity.dart';
 import 'camera_scanner_page.dart';
 import 'product_detail_page.dart';
@@ -204,7 +204,8 @@ class _InventoryPageState extends State<InventoryPage>
           if (widget.inventoryItems.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.delete_sweep_outlined),
-              onPressed: () => clearAllInventory(context), // Clear all inventory
+              onPressed: () =>
+                  clearAllInventory(context), // Clear all inventory
               tooltip: 'Clear All',
             ),
         ],
@@ -228,14 +229,11 @@ class _InventoryPageState extends State<InventoryPage>
       itemCount: widget.inventoryItems.length,
       itemBuilder: (context, index) {
         final item = widget.inventoryItems[index];
-        final (_, sizeUnit) = QuantityParser.parse(item.packageSize);
-        final displayUnit = sizeUnit.isNotEmpty ? sizeUnit : 'g';
 
         final subtitle = [
           if (item.brand.isNotEmpty && item.brand != 'N/A')
             'Brand: ${item.brand}',
-          '${item.inventoryGrams.round()} $displayUnit remaining',
-        ].join(' | ');
+        ].join();
 
         return Card(
           elevation: 2,
@@ -287,12 +285,18 @@ class _InventoryPageState extends State<InventoryPage>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Chip(
-                  label: Text('x${item.displayQuantity.toStringAsFixed(1)}'), // Display quantity chip
+                  label: Text(
+                    'x${item.displayQuantity.toStringAsFixed(1)}',
+                  ), // Display quantity chip
                   backgroundColor: Colors.grey.shade200,
                 ),
                 IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red), // Delete icon
-                  onPressed: () => showDeleteDialog(context, index), // Show delete dialog
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    color: Colors.red,
+                  ), // Delete icon
+                  onPressed: () =>
+                      showDeleteDialog(context, index), // Show delete dialog
                 ),
               ],
             ),
@@ -308,7 +312,11 @@ class _InventoryPageState extends State<InventoryPage>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.inbox_outlined, size: 80, color: Colors.grey), // Empty inbox icon
+          Icon(
+            Icons.inbox_outlined,
+            size: 80,
+            color: Colors.grey,
+          ), // Empty inbox icon
           SizedBox(height: 20),
           Text(
             'Your inventory is empty',
@@ -367,7 +375,9 @@ class _InventoryPageState extends State<InventoryPage>
               ),
               Expanded(
                 child: _isSearching
-                    ? const Center(child: CircularProgressIndicator()) // Loading indicator
+                    ? const Center(
+                        child: CircularProgressIndicator(),
+                      ) // Loading indicator
                     : ListView.builder(
                         itemCount: _searchResults.length,
                         itemBuilder: (context, index) {
@@ -400,7 +410,9 @@ class _InventoryPageState extends State<InventoryPage>
                                   ),
                                 );
                                 if (result != null) {
-                                  widget.onAddItem(result); // Add item to inventory
+                                  widget.onAddItem(
+                                    result,
+                                  ); // Add item to inventory
                                 }
                               },
                             ),
