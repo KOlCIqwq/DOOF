@@ -10,6 +10,7 @@ import '../widgets/consume_dialog.dart';
 import 'inventory_page.dart';
 import 'recipe_page.dart';
 import 'stats_page.dart';
+import './profile_page.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -348,9 +349,13 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                   consumptionHistory: _consumptionHistory,
                   dailySummaries: _dailySummaries,
                 ),
+                // Account page
+                ProfilePage(),
               ],
             ),
-      floatingActionButton: _currentIndex == 2
+      floatingActionButton:
+          _currentIndex ==
+              2 // Stats page
           ? FloatingActionButton.extended(
               onPressed: _showConsumeDialog, // Show consume dialog
               label: const Text(
@@ -366,6 +371,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         onTap: _onBottomNavTapped,
         selectedItemColor: Colors.black,
         unselectedItemColor: Colors.grey,
+        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.inventory_2_outlined),
@@ -381,6 +387,11 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
             icon: Icon(Icons.pie_chart_outline),
             activeIcon: Icon(Icons.pie_chart),
             label: 'Stats',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'Profile',
           ),
         ],
       ),
