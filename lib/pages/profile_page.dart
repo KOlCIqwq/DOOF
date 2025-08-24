@@ -7,31 +7,45 @@ class ProfilePage extends StatefulWidget {
 
 class ProfilePageState extends State<ProfilePage> {
   double? currentWeight;
+  double? currentHeight;
 
-  void adjustWeight() {
-    final TextEditingController weightController = TextEditingController(
-      text: currentWeight?.toString() ?? '',
+  // Generic dialog function for numerical input
+  void _showAdjustInputDialog({
+    required String title,
+    required String labelText,
+    double? initialValue,
+    required ValueChanged<double> onSaved,
+  }) {
+    final TextEditingController controller = TextEditingController(
+      text: initialValue?.toString() ?? '',
     );
 
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text("Adjust Weight"),
+          title: Text(title),
           content: TextField(
-            controller: weightController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: "Weight (kg)"),
+            controller: controller,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(labelText: labelText),
           ),
           actions: [
             TextButton(
               onPressed: () {
-                final newWeight = double.tryParse(weightController.text);
-                if (newWeight != null && newWeight > 0) {
-                  setState(() {
-                    currentWeight = newWeight;
-                  });
+                final newValue = double.tryParse(controller.text);
+                if (newValue != null && newValue > 0) {
+                  onSaved(
+                    newValue,
+                  ); // Use the callback to update the specific state
                   Navigator.of(context).pop();
+                } else {
+                  // Optionally show an error message or shake the dialog
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Please enter a valid positive number."),
+                    ),
+                  );
                 }
               },
               child: const Text("Save"),
@@ -46,59 +60,95 @@ class ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget buildFriendlyMessage(IconData icon, Color color, String message) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 80, color: color),
-            const SizedBox(height: 20),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: Colors.black54),
-            ),
-          ],
-        ),
-      ),
+  // Wrapper for adjusting weight using the generic dialog
+  void adjustWeight() {
+    _showAdjustInputDialog(
+      title: "Adjust Weight",
+      labelText: "Weight (kg)",
+      initialValue: currentWeight,
+      onSaved: (newValue) {
+        setState(() {
+          currentWeight = newValue;
+        });
+      },
+    );
+  }
+
+  // Wrapper for adjusting height using the generic dialog
+  void adjustHeight() {
+    _showAdjustInputDialog(
+      title: "Adjust Height",
+      labelText: "Height (cm)",
+      initialValue: currentHeight,
+      onSaved: (newValue) {
+        setState(() {
+          currentHeight = newValue;
+        });
+      },
     );
   }
 
   Widget buildBody() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        buildFriendlyMessage(Icons.warning, Colors.grey, "Under Construction"),
-        const SizedBox(height: 20),
-        // Weight input row
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text("Weight:"),
-            GestureDetector(
-              onTap: adjustWeight, // Function call on adjust weight
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: Colors.grey.shade400),
-                  ),
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          // Row for Weight
+          // Wrapped with InkWell for tap detection
+          InkWell(
+            onTap: adjustWeight,
+            child: Row(
+              children: [
+                const Text("Weight", style: TextStyle(fontSize: 16)),
+                const Spacer(),
+                Row(
+                  children: [
+                    Text(
+                      currentWeight != null
+                          ? currentWeight!.toStringAsFixed(1)
+                          : "____",
+                      style: const TextStyle(fontSize: 15),
+                    ),
+                    const SizedBox(width: 5),
+                    const Text(
+                      "kg",
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                  ],
                 ),
-                child: Text(
-                  currentWeight != null
-                      ? currentWeight!.toStringAsFixed(1)
-                      : "____",
-                  style: const TextStyle(fontSize: 16),
-                ),
-              ),
+              ],
             ),
-            const SizedBox(width: 5),
-            const Text("kg"),
-          ],
-        ),
-      ],
+          ),
+          // Divide the row
+          const SizedBox(height: 24),
+
+          // Height Row
+          InkWell(
+            onTap: adjustHeight,
+            child: Row(
+              children: [
+                const Text("Height", style: TextStyle(fontSize: 16)),
+                const Spacer(),
+                Row(
+                  children: [
+                    Text(
+                      currentHeight != null
+                          ? currentHeight!.toStringAsFixed(1)
+                          : "____",
+                      style: const TextStyle(fontSize: 15),
+                    ),
+                    const SizedBox(width: 5),
+                    const Text(
+                      "cm",
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -112,12 +162,7 @@ class ProfilePageState extends State<ProfilePage> {
         ),
         centerTitle: true,
       ),
-      body: Column(
-        children: [
-          Padding(padding: const EdgeInsets.all(16.0)),
-          Expanded(child: buildBody()),
-        ],
-      ),
+      body: buildBody(),
     );
   }
 }
