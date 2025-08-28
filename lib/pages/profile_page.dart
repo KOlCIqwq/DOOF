@@ -16,18 +16,27 @@ class ProfilePageState extends State<ProfilePage> {
 
   double? currentBmi;
   String? currentCategory;
+  ActivityLevel currentActivity = ActivityLevel.noWorkout;
+  double? maintenanceCalories;
 
-  void updateBmi() {
-    if (currentWeight != null && currentHeight != null) {
+  void updateStats() {
+    if (currentWeight != null && currentHeight != null && currentAge != null) {
       final bmi = BmiRecommendedIntake.calculateBmi(
         currentWeight!,
         currentHeight!,
       );
       final category = BmiRecommendedIntake.getBmiCategory(bmi);
+      final calories = BmiRecommendedIntake.calculateMaintenanceCalories(
+        weight: currentWeight!,
+        heightCm: currentHeight!,
+        age: currentAge!,
+        activityLevel: currentActivity,
+      );
 
       setState(() {
         currentBmi = bmi;
         currentCategory = category;
+        maintenanceCalories = calories;
       });
     }
   }
@@ -59,7 +68,7 @@ class ProfilePageState extends State<ProfilePage> {
                 final newValue = double.tryParse(controller.text);
                 if (newValue != null && newValue > 0) {
                   onSaved(newValue);
-                  updateBmi();
+                  updateStats();
                   Navigator.of(context).pop();
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -209,10 +218,46 @@ class ProfilePageState extends State<ProfilePage> {
             ),
           ),
 
+          ToggleButtons(
+            borderRadius: BorderRadius.circular(12),
+            isSelected: [
+              currentActivity == ActivityLevel.noWorkout,
+              currentActivity == ActivityLevel.lightWorkout,
+              currentActivity == ActivityLevel.heavyWorkout,
+            ],
+            onPressed: (index) {
+              setState(() {
+                currentActivity = ActivityLevel.values[index];
+              });
+              updateStats();
+            },
+            children: const [
+              Text("Workout Level: "),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Text("None"),
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Text("Light"),
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Text("Heavy"),
+              ),
+            ],
+          ),
+
           Text(
             currentBmi != null && currentCategory != null
                 ? "BMI: ${currentBmi!.toStringAsFixed(1)} ($currentCategory)"
                 : "BMI: ____",
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          Text(
+            maintenanceCalories != null
+                ? "Maintenance Calories: ${maintenanceCalories!.toStringAsFixed(0)} kcal"
+                : "Maintenance Calories: ____",
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
         ],
