@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/bmi_recommended_intake.dart';
+import '../utils/recommended_intake_helper.dart';
+import '../services/profile_storage.dart';
+import '../models/profile_model.dart';
 
 class ProfilePage extends StatefulWidget {
   @override
@@ -18,6 +21,37 @@ class ProfilePageState extends State<ProfilePage> {
   String? currentCategory;
   ActivityLevel currentActivity = ActivityLevel.noWorkout;
   double? maintenanceCalories;
+
+  @override
+  void initState() {
+    super.initState();
+    loadProfile(); // load saved profile on startup
+  }
+
+  Future<void> loadProfile() async {
+    final saved = await ProfileStorage.loadProfile();
+    if (saved != null) {
+      setState(() {
+        currentWeight = saved.weight;
+        currentHeight = saved.height;
+        currentAge = saved.age;
+        currentActivity = saved.activity;
+      });
+    }
+    updateStats(); // Update stats after loading
+  }
+
+  void saveProfile() {
+    if (currentWeight != null && currentHeight != null && currentAge != null) {
+      final profile = ProfileModel(
+        weight: currentWeight!,
+        height: currentHeight!,
+        age: currentAge!,
+        activity: currentActivity,
+      );
+      ProfileStorage.saveProfile(profile);
+    }
+  }
 
   void updateStats() {
     if (currentWeight != null && currentHeight != null && currentAge != null) {
@@ -38,6 +72,14 @@ class ProfilePageState extends State<ProfilePage> {
         currentCategory = category;
         maintenanceCalories = calories;
       });
+      RecommendedIntakeHelper.update(
+        // Also update recommended intake
+        weight: currentWeight!,
+        heightCm: currentHeight!,
+        age: currentAge!,
+        activityLevel: currentActivity,
+      );
+      saveProfile(); // Save profile after updating stats
     }
   }
 
@@ -217,33 +259,39 @@ class ProfilePageState extends State<ProfilePage> {
               ],
             ),
           ),
-
-          ToggleButtons(
-            borderRadius: BorderRadius.circular(12),
-            isSelected: [
-              currentActivity == ActivityLevel.noWorkout,
-              currentActivity == ActivityLevel.lightWorkout,
-              currentActivity == ActivityLevel.heavyWorkout,
-            ],
-            onPressed: (index) {
-              setState(() {
-                currentActivity = ActivityLevel.values[index];
-              });
-              updateStats();
-            },
-            children: const [
-              Text("Workout Level: "),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text("None"),
-              ),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text("Light"),
-              ),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text("Heavy"),
+          Row(
+            children: [
+              const Text("Activity", style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 16), // spacing between label and buttons
+              Expanded(
+                child: ToggleButtons(
+                  borderRadius: BorderRadius.circular(12),
+                  isSelected: [
+                    currentActivity == ActivityLevel.noWorkout,
+                    currentActivity == ActivityLevel.lightWorkout,
+                    currentActivity == ActivityLevel.heavyWorkout,
+                  ],
+                  onPressed: (index) {
+                    setState(() {
+                      currentActivity = ActivityLevel.values[index];
+                    });
+                    updateStats();
+                  },
+                  children: const [
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Text("None"),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Text("Light"),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Text("Heavy"),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
