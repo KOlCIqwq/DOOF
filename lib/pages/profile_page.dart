@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/bmi_recommended_intake.dart';
 
 class ProfilePage extends StatefulWidget {
   @override
@@ -6,11 +7,33 @@ class ProfilePage extends StatefulWidget {
 }
 
 class ProfilePageState extends State<ProfilePage> {
+  /*
+    This is a simplified profile page, it should be connected to supabase to save these details 
+  */
   double? currentWeight;
   double? currentHeight;
+  double? currentAge;
+
+  double? currentBmi;
+  String? currentCategory;
+
+  void updateBmi() {
+    if (currentWeight != null && currentHeight != null) {
+      final bmi = BmiRecommendedIntake.calculateBmi(
+        currentWeight!,
+        currentHeight!,
+      );
+      final category = BmiRecommendedIntake.getBmiCategory(bmi);
+
+      setState(() {
+        currentBmi = bmi;
+        currentCategory = category;
+      });
+    }
+  }
 
   // Generic dialog function for numerical input
-  void _showAdjustInputDialog({
+  void showAdjustInputDialog({
     required String title,
     required String labelText,
     double? initialValue,
@@ -35,12 +58,10 @@ class ProfilePageState extends State<ProfilePage> {
               onPressed: () {
                 final newValue = double.tryParse(controller.text);
                 if (newValue != null && newValue > 0) {
-                  onSaved(
-                    newValue,
-                  ); // Use the callback to update the specific state
+                  onSaved(newValue);
+                  updateBmi();
                   Navigator.of(context).pop();
                 } else {
-                  // Optionally show an error message or shake the dialog
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text("Please enter a valid positive number."),
@@ -62,7 +83,7 @@ class ProfilePageState extends State<ProfilePage> {
 
   // Wrapper for adjusting weight using the generic dialog
   void adjustWeight() {
-    _showAdjustInputDialog(
+    showAdjustInputDialog(
       title: "Adjust Weight",
       labelText: "Weight (kg)",
       initialValue: currentWeight,
@@ -76,13 +97,26 @@ class ProfilePageState extends State<ProfilePage> {
 
   // Wrapper for adjusting height using the generic dialog
   void adjustHeight() {
-    _showAdjustInputDialog(
+    showAdjustInputDialog(
       title: "Adjust Height",
       labelText: "Height (cm)",
       initialValue: currentHeight,
       onSaved: (newValue) {
         setState(() {
           currentHeight = newValue;
+        });
+      },
+    );
+  }
+
+  void adjustAge() {
+    showAdjustInputDialog(
+      title: "Adjust Age",
+      labelText: "Age (years)",
+      initialValue: currentAge,
+      onSaved: (newValue) {
+        setState(() {
+          currentAge = newValue;
         });
       },
     );
@@ -146,6 +180,40 @@ class ProfilePageState extends State<ProfilePage> {
                 ),
               ],
             ),
+          ),
+
+          const SizedBox(height: 24),
+          // Age Row
+          InkWell(
+            onTap: adjustAge,
+            child: Row(
+              children: [
+                const Text("Age", style: TextStyle(fontSize: 16)),
+                const Spacer(),
+                Row(
+                  children: [
+                    Text(
+                      currentAge != null
+                          ? currentAge!.toStringAsFixed(1)
+                          : "____",
+                      style: const TextStyle(fontSize: 15),
+                    ),
+                    const SizedBox(width: 5),
+                    const Text(
+                      "years",
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          Text(
+            currentBmi != null && currentCategory != null
+                ? "BMI: ${currentBmi!.toStringAsFixed(1)} ($currentCategory)"
+                : "BMI: ____",
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
         ],
       ),
