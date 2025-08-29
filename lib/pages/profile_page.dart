@@ -3,8 +3,10 @@ import '../services/bmi_recommended_intake.dart';
 import '../utils/recommended_intake_helper.dart';
 import '../services/profile_storage.dart';
 import '../models/profile_model.dart';
+import '../auth/auth_service.dart';
 
 class ProfilePage extends StatefulWidget {
+  const ProfilePage({super.key});
   @override
   State<ProfilePage> createState() => ProfilePageState();
 }
@@ -21,6 +23,12 @@ class ProfilePageState extends State<ProfilePage> {
   String? currentCategory;
   ActivityLevel currentActivity = ActivityLevel.noWorkout;
   double? maintenanceCalories;
+
+  final authService = AuthService();
+
+  void logout() async {
+    await authService.signOut();
+  }
 
   @override
   void initState() {
@@ -174,10 +182,12 @@ class ProfilePageState extends State<ProfilePage> {
   }
 
   Widget buildBody() {
+    final currentEmail = authService.getCurrentEmail() ?? "No Email";
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         children: [
+          Text("Current User: $currentEmail"),
           // Row for Weight
           // Wrapped with InkWell for tap detection
           InkWell(
@@ -322,6 +332,13 @@ class ProfilePageState extends State<ProfilePage> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: logout,
+            tooltip: "Logout",
+          ),
+        ],
       ),
       body: buildBody(),
     );
