@@ -11,6 +11,9 @@ import 'inventory_page.dart';
 import 'recipe_page.dart';
 import 'stats_page.dart';
 import './profile_page.dart';
+import '../services/user_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/profile_model.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -20,12 +23,13 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
-  List<FoodItem> _inventoryItems = [];
-  List<ConsumptionLog> _consumptionHistory = [];
-  List<DailyStatsSummary> _dailySummaries = [];
+  List<FoodItem> inventoryItems = [];
+  List<ConsumptionLog> consumptionHistory = [];
+  List<DailyStatsSummary> dailySummaries = [];
   bool _isLoading = true;
   int _currentIndex = 0;
   final PageController _pageController = PageController();
+  ProfileModel? profileHistory;
 
   @override
   void initState() {
@@ -52,21 +56,31 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     }
   }
 
-  // Load inventory, consumption history, and daily summaries
+  /// Load all data including inventory,consumption,summaries,personal info
   Future<void> _loadAllData() async {
     // Set loading state to true
     setState(() => _isLoading = true);
+    final user = Supabase.instance.client.auth.currentUser;
     try {
       // Load data from storage services
       final inventory = await InventoryStorageService.loadInventory();
       final consumption = await ConsumptionStorageService.loadConsumptionLog();
       final summaries = await DailyStatsStorageService.loadDailyStats();
-
+      final profile = user != null
+          ? await UserService().getProfile(user.id)
+          : null;
       setState(() {
-        _inventoryItems = inventory;
-        _consumptionHistory = consumption;
-        _dailySummaries = summaries;
+        inventoryItems = inventory;
+        consumptionHistory = consumption;
+        dailySummaries = summaries;
       });
+
+      if (profile != null) {
+        final p = ProfileModel.fromMap(profile);
+        setState(() {
+          profileHistory = p;
+        });
+      }
 
       // Process and save previous day's statistics
       await _processAndSavePreviousDayStats();
@@ -84,9 +98,9 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
 
   // Save all current data to storage
   Future<void> _saveAllData() async {
-    await InventoryStorageService.saveInventory(_inventoryItems);
-    await ConsumptionStorageService.saveConsumptionLog(_consumptionHistory);
-    await DailyStatsStorageService.saveDailyStats(_dailySummaries);
+    await InventoryStorageService.saveInventory(inventoryItems);
+    await ConsumptionStorageService.saveConsumptionLog(consumptionHistory);
+    await DailyStatsStorageService.saveDailyStats(dailySummaries);
   }
 
   // Process and save statistics for the previous day if not already summarized
@@ -96,14 +110,14 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     final yesterday = today.subtract(const Duration(days: 1));
 
     // Check if yesterday's stats are already summarized
-    bool isYesterdaySummarized = _dailySummaries.any(
+    bool isYesterdaySummarized = dailySummaries.any(
       (s) => DateUtils.isSameDay(s.date, yesterday),
     );
 
     if (isYesterdaySummarized) return; // Already summarized
 
     // Get consumption logs for yesterday
-    final yesterdayLogs = _consumptionHistory
+    final yesterdayLogs = consumptionHistory
         .where((log) => DateUtils.isSameDay(log.consumedDate, yesterday))
         .toList();
 
@@ -125,10 +139,10 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         nutrientTotals: totals,
       );
       setState(() {
-        _dailySummaries.add(summary);
+        dailySummaries.add(summary);
       });
       // Save updated daily stats
-      await DailyStatsStorageService.saveDailyStats(_dailySummaries);
+      await DailyStatsStorageService.saveDailyStats(dailySummaries);
     }
   }
 
@@ -136,19 +150,19 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   void _addItemToInventory(FoodItem newItem) {
     setState(() {
       // Find if item already exists
-      final int existingItemIndex = _inventoryItems.indexWhere(
+      final int existingItemIndex = inventoryItems.indexWhere(
         (item) => item.barcode == newItem.barcode,
       );
 
       if (existingItemIndex != -1) {
         // Update existing item's grams
-        final existingItem = _inventoryItems[existingItemIndex];
-        _inventoryItems[existingItemIndex] = existingItem.copyWith(
+        final existingItem = inventoryItems[existingItemIndex];
+        inventoryItems[existingItemIndex] = existingItem.copyWith(
           inventoryGrams: existingItem.inventoryGrams + newItem.inventoryGrams,
         );
       } else {
         // Add new item to the beginning of the list
-        _inventoryItems.insert(0, newItem);
+        inventoryItems.insert(0, newItem);
       }
     });
     _saveAllData(); // Persist changes
@@ -158,7 +172,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   // Update the entire inventory list
   void _updateInventory(List<FoodItem> updatedItems) {
     setState(() {
-      _inventoryItems = updatedItems;
+      inventoryItems = updatedItems;
     });
     _saveAllData(); // Persist changes
   }
@@ -192,21 +206,21 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       expirationDate: item.expirationDate,
     );
     setState(() {
-      _consumptionHistory.insert(0, log);
+      consumptionHistory.insert(0, log);
       // Update inventory item quantity
-      final itemIndex = _inventoryItems.indexWhere(
+      final itemIndex = inventoryItems.indexWhere(
         (i) => i.barcode == item.barcode,
       );
       if (itemIndex != -1) {
-        final currentItem = _inventoryItems[itemIndex];
+        final currentItem = inventoryItems[itemIndex];
         final newGrams = currentItem.inventoryGrams - gramsToConsume;
         if (newGrams > 0.1) {
-          _inventoryItems[itemIndex] = currentItem.copyWith(
+          inventoryItems[itemIndex] = currentItem.copyWith(
             inventoryGrams: newGrams,
           );
         } else {
           // Remove item if grams are too low
-          _inventoryItems.removeAt(itemIndex);
+          inventoryItems.removeAt(itemIndex);
         }
       }
     });
@@ -238,7 +252,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       source: recipe.source,
     );
     setState(() {
-      _consumptionHistory.insert(0, log);
+      consumptionHistory.insert(0, log);
       // Navigate to stats page
       _pageController.jumpToPage(2);
     });
@@ -271,7 +285,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   // Show consume item dialog
   Future<void> _showConsumeDialog() async {
     // Filter for consumable items
-    final consumableItems = _inventoryItems
+    final consumableItems = inventoryItems
         .where((item) => item.inventoryGrams > 0)
         .toList();
     if (consumableItems.isEmpty) {
@@ -337,7 +351,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
               children: [
                 // Inventory page
                 InventoryPage(
-                  inventoryItems: _inventoryItems,
+                  inventoryItems: inventoryItems,
                   onAddItem: _addItemToInventory,
                   onUpdateInventory: _updateInventory,
                 ),
@@ -345,12 +359,12 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                 RecipePage(onRecipeConsumed: _logRecipeConsumption),
                 // Stats page
                 StatsPage(
-                  inventoryItems: _inventoryItems,
-                  consumptionHistory: _consumptionHistory,
-                  dailySummaries: _dailySummaries,
+                  inventoryItems: inventoryItems,
+                  consumptionHistory: consumptionHistory,
+                  dailySummaries: dailySummaries,
                 ),
                 // Account page
-                ProfilePage(),
+                ProfilePage(profile: profileHistory),
               ],
             ),
       floatingActionButton:

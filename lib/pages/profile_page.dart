@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
 import '../services/bmi_recommended_intake.dart';
 import '../utils/recommended_intake_helper.dart';
-import '../services/profile_storage.dart';
 import '../models/profile_model.dart';
 import '../auth/auth_service.dart';
+import '../services/user_service.dart';
+
+enum Gender { male, female, other }
+
+enum ActivityPhase { keep, bulk, cut }
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+  final ProfileModel? profile;
+  const ProfilePage({super.key, this.profile});
   @override
   State<ProfilePage> createState() => ProfilePageState();
 }
 
 class ProfilePageState extends State<ProfilePage> {
   /*
-    This is a simplified profile page, it should be connected to supabase to save these details 
+    TODO: This is a simplified profile page, it should be connected to supabase to save these details 
   */
+  late ProfileModel? profile;
+
   double? currentWeight;
   double? currentHeight;
   double? currentAge;
@@ -22,6 +29,8 @@ class ProfilePageState extends State<ProfilePage> {
   double? currentBmi;
   String? currentCategory;
   ActivityLevel currentActivity = ActivityLevel.noWorkout;
+  Gender currentGender = Gender.male;
+  ActivityPhase currentPhase = ActivityPhase.keep;
   double? maintenanceCalories;
 
   final authService = AuthService();
@@ -33,10 +42,11 @@ class ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
-    loadProfile(); // load saved profile on startup
+    profile = widget.profile;
+    loadProfile(); // Consider loading when loaded the main page, not only here
   }
-
-  Future<void> loadProfile() async {
+  // We don't load the profile from the storage, rather from server
+  /* Future<void> loadProfile() async {
     final saved = await ProfileStorage.loadProfile();
     if (saved != null) {
       setState(() {
@@ -47,17 +57,49 @@ class ProfilePageState extends State<ProfilePage> {
       });
     }
     updateStats(); // Update stats after loading
+  } */
+
+  void loadProfile() {
+    if (profile != null) {
+      currentWeight = profile!.weight;
+      currentHeight = profile!.height;
+      currentAge = profile!.age;
+      currentGender = profile!.gender;
+      currentActivity = profile!.activity;
+      currentPhase = profile!.phase;
+
+      updateStats();
+    }
   }
 
-  void saveProfile() {
+  void saveProfile() async {
     if (currentWeight != null && currentHeight != null && currentAge != null) {
-      final profile = ProfileModel(
+      final updatedProfile = ProfileModel(
         weight: currentWeight!,
         height: currentHeight!,
         age: currentAge!,
+        gender: currentGender,
         activity: currentActivity,
+        phase: currentPhase,
       );
-      ProfileStorage.saveProfile(profile);
+
+      setState(() {
+        profile = updatedProfile;
+      });
+
+      // Persist to Supabase
+      final user = authService.getCurrentUser();
+      if (user != null) {
+        await UserService().updateProfile(
+          userId: user.id,
+          weight: currentWeight,
+          height: currentHeight,
+          age: currentAge?.toInt(),
+          gender: currentGender.index,
+          activity: currentActivity.index,
+          phase: currentPhase.index,
+        );
+      }
     }
   }
 
