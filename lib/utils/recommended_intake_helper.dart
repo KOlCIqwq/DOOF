@@ -31,7 +31,11 @@ class RecommendedIntakeHelper {
     );
 
     // You can make this activity-dependent later.
-    final macros = BmiRecommendedIntake.calculateMacros(calories);
+    final macros = BmiRecommendedIntake.calculateMacros(
+      calories: calories,
+      activityLevel: activityLevel,
+      phase: activityPhase,
+    );
 
     _dailyValues['energy-kcal'] = calories;
     _dailyValues['proteins'] = macros['protein_g'] ?? 0;

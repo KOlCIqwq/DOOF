@@ -80,33 +80,35 @@ class BmiRecommendedIntake {
 
   /// Adjust calories based on phase
   static double adjustCaloriesForPhase(
-    double maintenanceCalories,
+    double maintenance,
     ActivityPhase phase,
   ) {
     switch (phase) {
       case ActivityPhase.keep:
-        return maintenanceCalories;
+        return maintenance;
       case ActivityPhase.bulk:
-        return maintenanceCalories * 1.15; // +15%
+        return maintenance * 1.15; // +15% for bulk
       case ActivityPhase.cut:
-        return maintenanceCalories * 0.80; // -20%
+        return maintenance * 0.80; // –20% for cut
     }
   }
 
   /// Macro breakdown (20% protein, 30% fat, 50% carbs)
-  static Map<String, double> calculateMacros(double calories) {
-    final proteinCals = calories * 0.20;
-    final fatCals = calories * 0.30;
-    final carbCals = calories * 0.50;
-
+  static Map<String, double> calculateMacros({
+    required double calories,
+    required ActivityLevel activityLevel,
+    required ActivityPhase phase,
+  }) {
+    final pct = macroPercents(activityLevel: activityLevel, phase: phase);
     return {
-      "protein_g": proteinCals / 4,
-      "fat_g": fatCals / 9,
-      "carbs_g": carbCals / 4,
+      "protein_g": (calories * pct["protein"]!) / 4,
+      "carbs_g": (calories * pct["carbs"]!) / 4,
+      "fat_g": (calories * pct["fat"]!) / 9,
     };
   }
 
   /// Full calculation: BMI, category, calories, macros
+  /// Full calculation including macro phase logic
   static Map<String, dynamic> calculateAll({
     required double weight,
     required double heightCm,
@@ -117,7 +119,6 @@ class BmiRecommendedIntake {
   }) {
     final bmi = calculateBmi(weight, heightCm);
     final category = getBmiCategory(bmi);
-
     final maintenance = calculateMaintenanceCalories(
       weight: weight,
       heightCm: heightCm,
@@ -125,9 +126,12 @@ class BmiRecommendedIntake {
       gender: gender,
       activityLevel: activityLevel,
     );
-
     final targetCalories = adjustCaloriesForPhase(maintenance, phase);
-    final macros = calculateMacros(targetCalories);
+    final macros = calculateMacros(
+      calories: targetCalories,
+      activityLevel: activityLevel,
+      phase: phase,
+    );
 
     return {
       "bmi": bmi,
@@ -135,6 +139,56 @@ class BmiRecommendedIntake {
       "maintenance_calories": maintenance,
       "target_calories": targetCalories,
       "macros": macros,
+    };
+  }
+
+  static Map<String, double> macroPercents({
+    required ActivityLevel activityLevel,
+    required ActivityPhase phase,
+  }) {
+    // Base macro percentages by activity level
+    double proteinPct, carbPct, fatPct;
+    switch (activityLevel) {
+      case ActivityLevel.noWorkout:
+        proteinPct = 0.25;
+        carbPct = 0.50;
+        fatPct = 0.25;
+        break;
+      case ActivityLevel.lightWorkout:
+        proteinPct = 0.30;
+        carbPct = 0.50;
+        fatPct = 0.20;
+        break;
+      case ActivityLevel.heavyWorkout:
+        proteinPct = 0.30;
+        carbPct = 0.55;
+        fatPct = 0.15;
+        break;
+    }
+
+    // Adjust based on phase
+    switch (phase) {
+      case ActivityPhase.keep:
+        // keep base
+        break;
+      case ActivityPhase.bulk:
+        carbPct += 0.05;
+        fatPct += 0.05; // extra energy from carbs/fat
+        proteinPct -= 0.05;
+        break;
+      case ActivityPhase.cut:
+        fatPct -= 0.05;
+        carbPct -= 0.05;
+        proteinPct += 0.10; // prioritize protein
+        break;
+    }
+
+    // Normalize sums
+    final sum = proteinPct + carbPct + fatPct;
+    return {
+      "protein": proteinPct / sum,
+      "carbs": carbPct / sum,
+      "fat": fatPct / sum,
     };
   }
 }
