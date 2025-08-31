@@ -1,5 +1,4 @@
 import '../services/bmi_recommended_intake.dart';
-import '../pages/profile_page.dart';
 
 class ProfileModel {
   final double? weight;
@@ -31,42 +30,86 @@ class ProfileModel {
     );
   }
 
-  static ActivityLevel activityFromNum(int? val) {
-    switch (val) {
-      case 1:
-        return ActivityLevel.noWorkout;
-      case 2:
-        return ActivityLevel.lightWorkout;
-      case 3:
-        return ActivityLevel.heavyWorkout;
-      default:
-        return ActivityLevel.noWorkout;
-    }
+  factory ProfileModel.defaults() {
+    return ProfileModel(
+      weight: null, // A new user profile starts empty
+      height: null,
+      age: null,
+      gender: Gender.male, // Or your preferred default
+      activity: ActivityLevel.noWorkout,
+      phase: ActivityPhase.keep,
+    );
   }
 
-  static Gender genderFromNum(int? val) {
-    switch (val) {
-      case 1:
-        return Gender.male;
-      case 2:
-        return Gender.female;
-      case 3:
-        return Gender.other;
-      default:
-        return Gender.male;
-    }
+  // Ensure fromJson and toJson handle all fields
+  factory ProfileModel.fromJson(Map<String, dynamic> json) {
+    return ProfileModel(
+      weight: (json['weight'] as num).toDouble(),
+      height: (json['height'] as num).toDouble(),
+      age: (json['age'] as num).toDouble(),
+      // Use default values if a field might be null in old stored data
+      gender: Gender.values[json['gender'] ?? 0],
+      activity: ActivityLevel.values[json['activity'] ?? 0],
+      phase: ActivityPhase.values[json['phase'] ?? 0],
+    );
   }
 
-  static ActivityPhase phaseFromNum(int? val) {
-    switch (val) {
-      case 1:
-        return ActivityPhase.keep;
-      case 2:
-        return ActivityPhase.cut;
-      case 3:
-        return ActivityPhase.bulk;
-      default:
-        return ActivityPhase.keep;
+  Map<String, dynamic> toJson() {
+    return {
+      'weight': weight,
+      'height': height,
+      'age': age,
+      'gender': gender.name,
+      'activity': activity.name,
+      'phase': phase.name,
+    };
+  }
+
+  static ActivityLevel activityFromNum(dynamic v) {
+    if (v is String) {
+      return ActivityLevel.values.firstWhere(
+        (e) => e.name == v,
+        orElse: () => ActivityLevel.noWorkout,
+      );
     }
+    if (v is num) {
+      final i = v.toInt();
+      return (i >= 0 && i < ActivityLevel.values.length)
+          ? ActivityLevel.values[i]
+          : ActivityLevel.noWorkout;
+    }
+    return ActivityLevel.noWorkout;
+  }
+
+  static Gender genderFromNum(dynamic v) {
+    if (v is String) {
+      return Gender.values.firstWhere(
+        (e) => e.name == v,
+        orElse: () => Gender.male,
+      );
+    }
+    if (v is num) {
+      final i = v.toInt();
+      return (i >= 0 && i < Gender.values.length)
+          ? Gender.values[i]
+          : Gender.male;
+    }
+    return Gender.male;
+  }
+
+  static ActivityPhase phaseFromNum(dynamic v) {
+    if (v is String) {
+      return ActivityPhase.values.firstWhere(
+        (e) => e.name == v,
+        orElse: () => ActivityPhase.keep,
+      );
+    }
+    if (v is num) {
+      final i = v.toInt();
+      return (i >= 0 && i < ActivityPhase.values.length)
+          ? ActivityPhase.values[i]
+          : ActivityPhase.keep;
+    }
+    return ActivityPhase.keep;
   }
 }

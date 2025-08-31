@@ -14,6 +14,7 @@ import './profile_page.dart';
 import '../services/user_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/profile_model.dart';
+import '../services/profille_storage.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -30,6 +31,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   int _currentIndex = 0;
   final PageController _pageController = PageController();
   ProfileModel? profileHistory;
+  bool isDataDirty = true;
 
   @override
   void initState() {
@@ -53,6 +55,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _saveAllData();
+      _syncAllDataToSupabase();
     }
   }
 
@@ -66,21 +69,23 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       final inventory = await InventoryStorageService.loadInventory();
       final consumption = await ConsumptionStorageService.loadConsumptionLog();
       final summaries = await DailyStatsStorageService.loadDailyStats();
-      final profile = user != null
-          ? await UserService().getProfile(user.id)
-          : null;
+      ProfileModel loadedProfile;
+      if (user != null) {
+        final profileMap = await UserService().getProfile(user.id);
+        if (profileMap != null) {
+          loadedProfile = ProfileModel.fromMap(profileMap);
+        } else {
+          loadedProfile = ProfileModel.defaults();
+        }
+      } else {
+        loadedProfile = ProfileModel.defaults();
+      }
       setState(() {
         inventoryItems = inventory;
         consumptionHistory = consumption;
         dailySummaries = summaries;
+        profileHistory = loadedProfile;
       });
-
-      if (profile != null) {
-        final p = ProfileModel.fromMap(profile);
-        setState(() {
-          profileHistory = p;
-        });
-      }
 
       // Process and save previous day's statistics
       await _processAndSavePreviousDayStats();
@@ -101,6 +106,43 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     await InventoryStorageService.saveInventory(inventoryItems);
     await ConsumptionStorageService.saveConsumptionLog(consumptionHistory);
     await DailyStatsStorageService.saveDailyStats(dailySummaries);
+
+    if (profileHistory != null) {
+      await ProfileStorage.saveProfile(profileHistory!);
+    }
+  }
+
+  Future<void> _syncAllDataToSupabase() async {
+    // Only run if there are pending changes.
+    if (!isDataDirty) {
+      return;
+    }
+
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      return;
+    }
+    try {
+      // --- Sync Profile Data ---
+      if (profileHistory != null) {
+        await UserService().updateProfile(
+          userId: user.id,
+          weight: profileHistory!.weight,
+          height: profileHistory!.height,
+          age: profileHistory!.age?.toInt(),
+          gender: profileHistory!.gender.index,
+          activity: profileHistory!.activity.index,
+          phase: profileHistory!.phase.index,
+        );
+        _showErrorSnackbar("Synced");
+      }
+
+      setState(() {
+        isDataDirty = false;
+      });
+    } catch (e) {
+      _showErrorSnackbar("Couldn't sync data. Will try again later");
+    }
   }
 
   // Process and save statistics for the previous day if not already summarized
@@ -262,6 +304,13 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     ); // Show success
   }
 
+  void _handleProfileUpdate(ProfileModel updatedProfile) {
+    setState(() {
+      profileHistory = updatedProfile;
+      isDataDirty = true; // Mark data as dirty
+    });
+  }
+
   // Map Spoonacular nutrient names to Open Food Facts keys
   String? _mapSpoonacularToOff(String name) {
     final map = {
@@ -364,7 +413,10 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                   dailySummaries: dailySummaries,
                 ),
                 // Account page
-                ProfilePage(profile: profileHistory),
+                ProfilePage(
+                  profile: profileHistory,
+                  onProfileChanged: _handleProfileUpdate,
+                ),
               ],
             ),
       floatingActionButton:

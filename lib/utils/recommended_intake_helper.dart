@@ -12,25 +12,26 @@ class RecommendedIntakeHelper {
     'salt': 6, // g
   };
 
-  // Your existing code can still read this:
   static Map<String, double> get dailyValues => _dailyValues;
-
   // Call this whenever the user updates weight/height/age/activity.
   static void update({
     required double weight,
     required double heightCm,
     required double age,
+    required Gender gender,
     required ActivityLevel activityLevel,
+    required ActivityPhase activityPhase,
   }) {
     final calories = BmiRecommendedIntake.calculateMaintenanceCalories(
       weight: weight,
       heightCm: heightCm,
       age: age,
+      gender: gender,
       activityLevel: activityLevel,
     );
 
     // You can make this activity-dependent later.
-    final macros = BmiRecommendedIntake.calculateMacros(calories: calories);
+    final macros = BmiRecommendedIntake.calculateMacros(calories);
 
     _dailyValues['energy-kcal'] = calories;
     _dailyValues['proteins'] = macros['protein_g'] ?? 0;
