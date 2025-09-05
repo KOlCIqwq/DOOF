@@ -15,6 +15,7 @@ import '../services/user_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/profile_model.dart';
 import '../services/profille_storage.dart';
+import '../models/inventory_model.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -31,7 +32,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   int _currentIndex = 0;
   final PageController _pageController = PageController();
   ProfileModel? profileHistory;
-  bool isDataDirty = true;
+  bool isDataDirty = false;
 
   @override
   void initState() {
@@ -66,6 +67,17 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     final user = Supabase.instance.client.auth.currentUser;
     try {
       // Load data from storage services
+      InventoryItem loadedInventory;
+      if (user != null) {
+        final profileMap = await UserService().getProfile(user.id);
+        if (profileMap != null) {
+          loadedInventory = InventoryItem.fromJson(profileMap);
+        } else {
+          loadedInventory = InventoryItem.defaults();
+        }
+      } else {
+        loadedInventory = InventoryItem.defaults();
+      }
       final inventory = await InventoryStorageService.loadInventory();
       final consumption = await ConsumptionStorageService.loadConsumptionLog();
       final summaries = await DailyStatsStorageService.loadDailyStats();

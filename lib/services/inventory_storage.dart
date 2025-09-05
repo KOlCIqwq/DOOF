@@ -3,19 +3,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/food_item.dart';
 
 class InventoryStorageService {
-  static const String _inventoryKey = 'inventory_items';
+  static const String inventoryKey = 'inventory_items';
 
   static Future<void> saveInventory(List<FoodItem> items) async {
     final prefs = await SharedPreferences.getInstance();
     final jsonList = items.map((item) => item.toJson()).toList();
     final jsonString = jsonEncode(jsonList);
-    await prefs.setString(_inventoryKey, jsonString);
+    await prefs.setString(inventoryKey, jsonString);
   }
 
   static Future<List<FoodItem>> loadInventory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final jsonString = prefs.getString(_inventoryKey);
+      final jsonString = prefs.getString(inventoryKey);
 
       if (jsonString == null || jsonString.isEmpty) {
         return [];
@@ -30,13 +30,13 @@ class InventoryStorageService {
 
   static Future<void> clearInventory() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_inventoryKey);
+    await prefs.remove(inventoryKey);
   }
 
   static Future<bool> hasInventoryData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.containsKey(_inventoryKey);
+      return prefs.containsKey(inventoryKey);
     } catch (e) {
       return false;
     }

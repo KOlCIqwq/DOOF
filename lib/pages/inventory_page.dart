@@ -24,24 +24,24 @@ class InventoryPage extends StatefulWidget {
   });
 
   @override
-  State<InventoryPage> createState() => _InventoryPageState();
+  State<InventoryPage> createState() => InventoryPageState();
 }
 
-class _InventoryPageState extends State<InventoryPage>
+class InventoryPageState extends State<InventoryPage>
     with SingleTickerProviderStateMixin {
-  late AnimationController _fabAnimationController;
-  bool _isFabMenuOpen = false;
-  bool _isSearchVisible = false;
+  late AnimationController fabAnimationController;
+  bool isFabMenuOpen = false;
+  bool isSearchVisible = false;
 
-  final TextEditingController _searchController = TextEditingController();
-  List<FoodItem> _searchResults = [];
-  bool _isSearching = false;
-  Timer? _debounce;
+  final TextEditingController searchController = TextEditingController();
+  List<FoodItem> searchResults = [];
+  bool isSearching = false;
+  Timer? debounce;
 
   @override
   void initState() {
     super.initState();
-    _fabAnimationController = AnimationController(
+    fabAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 250),
     );
@@ -49,46 +49,46 @@ class _InventoryPageState extends State<InventoryPage>
 
   @override
   void dispose() {
-    _fabAnimationController.dispose();
-    _searchController.dispose();
-    _debounce?.cancel();
+    fabAnimationController.dispose();
+    searchController.dispose();
+    debounce?.cancel();
     super.dispose();
   }
 
   // Toggle the floating action button menu open/close state
   void toggleFabMenu() {
     setState(() {
-      _isFabMenuOpen = !_isFabMenuOpen;
-      if (_isFabMenuOpen) {
-        _fabAnimationController.forward();
+      isFabMenuOpen = !isFabMenuOpen;
+      if (isFabMenuOpen) {
+        fabAnimationController.forward();
       } else {
-        _fabAnimationController.reverse();
+        fabAnimationController.reverse();
       }
     });
   }
 
   // Open the search overlay
   void openSearch() {
-    if (_isFabMenuOpen) {
+    if (isFabMenuOpen) {
       toggleFabMenu(); // Close FAB menu if open
     }
     setState(() {
-      _isSearchVisible = true;
+      isSearchVisible = true;
     });
   }
 
   // Close the search overlay and clear results
   void closeSearch() {
     setState(() {
-      _isSearchVisible = false;
-      _searchResults = [];
-      _searchController.clear();
+      isSearchVisible = false;
+      searchResults = [];
+      searchController.clear();
     });
   }
 
   // Scan a barcode using the camera
   Future<void> scanBarcode() async {
-    if (_isFabMenuOpen) {
+    if (isFabMenuOpen) {
       toggleFabMenu(); // Close FAB menu if open
     }
     // Request camera permission
@@ -115,8 +115,8 @@ class _InventoryPageState extends State<InventoryPage>
 
   // Handle search query changes with debounce
   void onSearchChanged(String query) {
-    if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () {
+    if (debounce?.isActive ?? false) debounce!.cancel();
+    debounce = Timer(const Duration(milliseconds: 500), () {
       performSearch(query); // Perform search after debounce
     });
   }
@@ -125,19 +125,19 @@ class _InventoryPageState extends State<InventoryPage>
   Future<void> performSearch(String query) async {
     if (query.length < 2) {
       setState(() {
-        _searchResults = [];
+        searchResults = [];
       });
       return;
     }
     setState(() {
-      _isSearching = true;
+      isSearching = true;
     });
     // Call API to search products
     final results = await OpenFoodFactsApiService.searchProductsByName(query);
     if (mounted) {
       setState(() {
-        _searchResults = results;
-        _isSearching = false;
+        searchResults = results;
+        isSearching = false;
       });
     }
   }
@@ -215,7 +215,7 @@ class _InventoryPageState extends State<InventoryPage>
           widget.inventoryItems.isEmpty
               ? buildEmptyState() // Display empty state
               : buildInventoryList(context), // Display inventory list
-          if (_isSearchVisible) buildSearchOverlay(), // Display search overlay
+          if (isSearchVisible) buildSearchOverlay(), // Display search overlay
         ],
       ),
       floatingActionButton: buildExpandingFab(), // Expanding FAB
@@ -353,7 +353,7 @@ class _InventoryPageState extends State<InventoryPage>
                   elevation: 4,
                   borderRadius: BorderRadius.circular(30),
                   child: TextField(
-                    controller: _searchController,
+                    controller: searchController,
                     autofocus: true,
                     decoration: InputDecoration(
                       hintText: 'Search for a product...',
@@ -374,14 +374,14 @@ class _InventoryPageState extends State<InventoryPage>
                 ),
               ),
               Expanded(
-                child: _isSearching
+                child: isSearching
                     ? const Center(
                         child: CircularProgressIndicator(),
                       ) // Loading indicator
                     : ListView.builder(
-                        itemCount: _searchResults.length,
+                        itemCount: searchResults.length,
                         itemBuilder: (context, index) {
-                          final item = _searchResults[index];
+                          final item = searchResults[index];
                           return Card(
                             margin: const EdgeInsets.symmetric(
                               horizontal: 16,
@@ -434,9 +434,9 @@ class _InventoryPageState extends State<InventoryPage>
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         FadeTransition(
-          opacity: _fabAnimationController,
+          opacity: fabAnimationController,
           child: ScaleTransition(
-            scale: _fabAnimationController,
+            scale: fabAnimationController,
             child: Padding(
               padding: const EdgeInsets.only(bottom: 16.0),
               child: FloatingActionButton.small(
@@ -448,9 +448,9 @@ class _InventoryPageState extends State<InventoryPage>
           ),
         ),
         FadeTransition(
-          opacity: _fabAnimationController,
+          opacity: fabAnimationController,
           child: ScaleTransition(
-            scale: _fabAnimationController,
+            scale: fabAnimationController,
             child: Padding(
               padding: const EdgeInsets.only(bottom: 16.0),
               child: FloatingActionButton.small(
@@ -466,7 +466,7 @@ class _InventoryPageState extends State<InventoryPage>
           onPressed: toggleFabMenu, // Toggle FAB menu
           child: AnimatedIcon(
             icon: AnimatedIcons.menu_close,
-            progress: _fabAnimationController,
+            progress: fabAnimationController,
           ),
         ),
       ],
