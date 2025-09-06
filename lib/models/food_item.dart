@@ -101,35 +101,33 @@ class FoodItem {
   }
 
   factory FoodItem.fromJson(Map<String, dynamic> json) {
-    double grams = (json['inventoryGrams'] as num?)?.toDouble() ?? 0.0;
-    if (grams == 0.0 && json.containsKey('quantity')) {
-      final oldQty = (json['quantity'] as num?)?.toInt() ?? 1;
-      final pkgSize = json['packageSize'] as String? ?? '100 g';
-      final gramsPerUnit = QuantityParser.toGrams(
-        QuantityParser.parse(pkgSize),
-      );
-      grams = oldQty * (gramsPerUnit > 0 ? gramsPerUnit : 100.0);
-    }
-
     return FoodItem(
-      barcode: json['barcode'] ?? '',
-      name: json['name'] ?? '',
+      barcode: json['barcode'] as String,
+
+      name: json['name'] ?? 'Unknown Product',
       brand: json['brand'] ?? '',
-      imageUrl: json['imageUrl'] ?? '',
-      insertDate: DateTime.parse(
-        json['insertDate'] ?? DateTime.now().toIso8601String(),
-      ),
-      expirationDate: json['expirationDate'] != null
-          ? DateTime.parse(json['expirationDate'])
+      imageUrl: json['image_url'] ?? '',
+
+      insertDate: json['insert_date'] != null
+          ? DateTime.parse(json['insert_date'])
+          : DateTime.now(),
+      expirationDate: json['expiration_date'] != null
+          ? DateTime.parse(json['expiration_date'])
           : null,
+
       categories: json['categories'] ?? '',
-      nutriments: Map<String, dynamic>.from(json['nutriments'] ?? {}),
-      fat: (json['fat'] as num?)?.toDouble() ?? 0.0,
-      carbs: (json['carbs'] as num?)?.toDouble() ?? 0.0,
-      protein: (json['protein'] as num?)?.toDouble() ?? 0.0,
-      packageSize: json['packageSize'] ?? '100 g',
-      inventoryGrams: grams,
-      isKnown: json['isKnown'] ?? true,
+      packageSize: json['package_size'] ?? '',
+
+      // Handle the nested JSON 'nutriments' object
+      nutriments: json['nutriments'] != null
+          ? Map<String, dynamic>.from(json['nutriments'])
+          : const {}, // Default to an empty map
+      fat: (json['fat'] as num? ?? 0.0).toDouble(),
+      carbs: (json['carbs'] as num? ?? 0.0).toDouble(),
+      protein: (json['protein'] as num? ?? 0.0).toDouble(),
+      inventoryGrams: (json['inventory_grams'] as num? ?? 0.0).toDouble(),
+
+      isKnown: json['is_known'] ?? false,
     );
   }
 }

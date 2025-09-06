@@ -29,17 +29,21 @@ class InventoryModel {
 
   // Factory constructor to parse the joined data from Supabase
   factory InventoryModel.fromJson(Map<String, dynamic> json) {
-    if (json['foodItems'] == null) {
-      throw Exception('FoodItem data is missing in the response!');
+    final foodData = json['foodItems'] ?? json['foodItem'];
+
+    if (foodData == null) {
+      // This can happen if the join fails for a specific row.
+      throw Exception(
+        'Inventory row with ID ${json['id']} is missing its food data.',
+      );
     }
+
     return InventoryModel(
-      id: json['id'],
-      userId: json['user_id'],
-      foodId: json['food_id'],
-      // Assuming 'quantity' in Supabase maps to 'inventoryGrams' locally
+      id: json['id'] ?? '',
+      userId: json['user_id'] ?? '',
+      foodId: json['food_id'] ?? '',
       quantity: (json['quantity'] as num? ?? 0.0).toDouble(),
-      // Create a FoodItem from the nested JSON object
-      foodItem: FoodItem.fromJson(json['foodItems']),
+      foodItem: FoodItem.fromJson(foodData),
     );
   }
 
