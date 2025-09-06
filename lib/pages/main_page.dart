@@ -109,7 +109,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       });
     } catch (e) {
       // Show error snackbar on failure
-      _showErrorSnackbar('Error loading data: $e');
+      showErrorSnackbar('Error loading data: $e');
       setState(() => _isLoading = false);
     }
   }
@@ -136,7 +136,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       return;
     }
     try {
-      // --- Sync Profile Data ---
+      // Sync Profile Data
       if (profileHistory != null) {
         await UserService().updateProfile(
           userId: user.id,
@@ -153,12 +153,24 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
           );
         }
 
-        // 2. Process Creates and Updates: Upsert the entire local inventory.
-        // This command will create new rows and update existing ones in a single call.
+        /* // Try to sync the items offline
+        final allLocalFoodItems = inventoryItems
+            .map((invModel) => invModel.foodItem)
+            .toList();
+
+        await UserService().upsertFoodItems(allLocalFoodItems); */
+
+        if (inventoryRowsToDelete.isNotEmpty) {
+          await UserService().deleteInventoryItems(
+            itemIds: inventoryRowsToDelete,
+          );
+        }
+
+        // Upsert the entire local inventory.
         if (inventoryItems.isNotEmpty) {
           await UserService().upsertInventory(items: inventoryItems);
         }
-        _showErrorSnackbar("Synced");
+        showErrorSnackbar("Synced");
       }
 
       setState(() {
@@ -166,7 +178,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         inventoryRowsToDelete.clear();
       });
     } catch (e) {
-      _showErrorSnackbar("Can't sync:$e");
+      showErrorSnackbar("Can't sync:$e");
     }
   }
 
@@ -332,7 +344,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       }
     });
     _saveAllData(); // Persist changes
-    _showSuccessSnackbar('Consumption logged!'); // Show success
+    showErrorSnackbar('Consumption logged!'); // Show success
   }
 
   // Log a recipe consumption
@@ -364,7 +376,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       _pageController.jumpToPage(2);
     });
     _saveAllData(); // Persist changes
-    _showSuccessSnackbar(
+    showErrorSnackbar(
       '${recipe.title} logged as ${mealType.name}!',
     ); // Show success
   }
@@ -397,13 +409,13 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   }
 
   // Show consume item dialog
-  Future<void> _showConsumeDialog() async {
+  Future<void> showConsumeDialog() async {
     // Filter for consumable items
     final consumableItems = inventoryItems
         .where((item) => item.quantity > 0)
         .toList();
     if (consumableItems.isEmpty) {
-      _showErrorSnackbar("No consumable items in inventory.");
+      showErrorSnackbar("No consumable items in inventory.");
       return;
     }
     // Display bottom sheet dialog
@@ -418,14 +430,14 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   }
 
   // Callback for page changes in PageView
-  void _onPageChanged(int index) {
+  void onPageChanged(int index) {
     setState(() {
       _currentIndex = index;
     });
   }
 
   // Handle bottom navigation bar taps
-  void _onBottomNavTapped(int index) {
+  void onBottomNavTapped(int index) {
     _pageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 300),
@@ -433,17 +445,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     );
   }
 
-  // Show a success snackbar message
-  void _showSuccessSnackbar(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.green),
-      );
-    }
-  }
-
   // Show an error snackbar message
-  void _showErrorSnackbar(String message) {
+  void showErrorSnackbar(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message), backgroundColor: Colors.red),
@@ -460,7 +463,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
             ) // Loading indicator
           : PageView(
               controller: _pageController,
-              onPageChanged: _onPageChanged,
+              onPageChanged: onPageChanged,
               physics: const BouncingScrollPhysics(),
               children: [
                 // Inventory page
@@ -492,7 +495,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
           _currentIndex ==
               2 // Stats page
           ? FloatingActionButton.extended(
-              onPressed: _showConsumeDialog, // Show consume dialog
+              onPressed: showConsumeDialog, // Show consume dialog
               label: const Text(
                 'Consume Item',
                 style: TextStyle(color: Colors.white),
@@ -503,7 +506,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
           : null,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: _onBottomNavTapped,
+        onTap: onBottomNavTapped,
         selectedItemColor: Colors.black,
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,

@@ -53,6 +53,14 @@ class _CameraScannerPageState extends State<CameraScannerPage>
     super.dispose();
   }
 
+  void showErrorSnackbar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   // Initialize the camera for scanning
   Future<void> initializeCamera() async {
     try {
@@ -129,9 +137,12 @@ class _CameraScannerPageState extends State<CameraScannerPage>
 
         try {
           await userService.upsertFoodItem(product);
+          //showErrorSnackbar("immediately save food item to Supabase:");
         } catch (e) {
           // If this fails (e.g., user is offline), don't block the UI.
-          debugPrint("Failed to immediately save food item to Supabase: $e");
+          showErrorSnackbar(
+            "Failed to immediately save food item to Supabase: $e",
+          );
         }
 
         if (!mounted) return;

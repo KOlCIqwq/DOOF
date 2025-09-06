@@ -95,6 +95,7 @@ class UserService {
     });
   }
 
+  /// Upsert 1 food item
   Future<void> upsertFoodItem(FoodItem item) async {
     await supabase.from('foodItems').upsert({
       'barcode': item.barcode,
@@ -108,7 +109,16 @@ class UserService {
       'protein': item.protein,
       'package_size': item.packageSize,
       'is_known': true, // We now know about this item
+      'insert_date': DateTime.now().toIso8601String(),
     });
+  }
+
+  /// Upsert multiple food items
+  Future<void> upsertFoodItems(List<FoodItem> items) async {
+    if (items.isEmpty) return;
+    for (var item in items) {
+      upsertFoodItem(item);
+    }
   }
 
   Future<Map<String, dynamic>?> getItem({required String itemId}) async {
