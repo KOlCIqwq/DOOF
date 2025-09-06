@@ -1,4 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/food_item.dart';
+import '../models/inventory_model.dart';
 
 class UserService {
   final SupabaseClient supabase = Supabase.instance.client;
@@ -60,8 +62,7 @@ class UserService {
 
   /// Create new food item
   Future<void> createItem({
-    required String itemId,
-    String? barcode,
+    required String barcode,
     String? name,
     String? brand,
     String? imageUrl,
@@ -77,7 +78,6 @@ class UserService {
     bool? isKnown,
   }) async {
     await supabase.from('foodItems').insert({
-      'id': itemId,
       'barcode': barcode,
       'name': name,
       'brand': brand,
@@ -92,6 +92,22 @@ class UserService {
       'package_size': packageSize,
       'inventory_grams': inventoryGrams,
       'is_known': isKnown,
+    });
+  }
+
+  Future<void> upsertFoodItem(FoodItem item) async {
+    await supabase.from('foodItems').upsert({
+      'barcode': item.barcode,
+      'name': item.name,
+      'brand': item.brand,
+      'image_url': item.imageUrl,
+      'categories': item.categories,
+      'nutriments': item.nutriments, // Supabase handles the jsonb conversion
+      'fat': item.fat,
+      'carbs': item.carbs,
+      'protein': item.protein,
+      'package_size': item.packageSize,
+      'is_known': true, // We now know about this item
     });
   }
 
@@ -114,19 +130,20 @@ class UserService {
     await supabase.from('userItems').insert({
       'id': inventoryId,
       'user_id': userId,
-      'food_id': foodId,
+      'item_barcode': foodId,
       'quantity': quantity ?? 0,
       'created_at': DateTime.now().toIso8601String(),
     });
   }
 
-  /// Get inventory for a user
+  /// Get inventory for a user, joining with the foodItems table
   Future<List<Map<String, dynamic>>> getInventoryFromUserId({
     required String userId,
   }) async {
     final response = await supabase
         .from('userItems')
-        .select('id, food_id, quantity')
+        // Select all columns from userItems AND all columns from the related foodItems
+        .select('*, foodItems (*)')
         .eq('user_id', userId);
 
     return (response as List).cast<Map<String, dynamic>>();
@@ -150,6 +167,30 @@ class UserService {
           'updated_at': DateTime.now().toIso8601String(),
         })
         .eq('user_id', userId)
-        .eq('food_id', foodId);
+        .eq('item_barcode', foodId);
+  }
+
+  /// Deletes a list of inventory items by their unique row IDs.
+  Future<void> deleteInventoryItems({required List<String> itemIds}) async {
+    if (itemIds.isEmpty) return; // Don't run a delete query for an empty list
+    await supabase.from('userItems').delete().inFilter('id', itemIds);
+  }
+
+  /// Creates or updates a list of inventory rows ('userItems').
+  Future<void> upsertInventory({required List<InventoryModel> items}) async {
+    if (items.isEmpty) return; // Don't run an upsert for an empty list
+
+    final List<Map<String, dynamic>> upsertData = items.map((item) {
+      return {
+        'id': item.id,
+        'user_id': item.userId,
+        'item_barcode': item.foodId,
+        'quantity': item
+            .foodItem
+            .inventoryGrams, // Get the quantity from the nested FoodItem
+      };
+    }).toList();
+
+    await supabase.from('userItems').upsert(upsertData);
   }
 }

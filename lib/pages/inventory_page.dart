@@ -10,17 +10,22 @@ import '../services/open_food_facts_api_service.dart';
 import '../widgets/delete_quantity.dart';
 import 'camera_scanner_page.dart';
 import 'product_detail_page.dart';
+import '../models/inventory_model.dart';
 
 class InventoryPage extends StatefulWidget {
-  final List<FoodItem> inventoryItems;
-  final Function(FoodItem) onAddItem;
-  final Function(List<FoodItem>) onUpdateInventory;
+  final List<InventoryModel> inventory;
+  final Function(FoodItem newItem) onAddNewItem;
+  final Function(String inventoryId, double newGrams) onUpdateItem;
+  final Function(String inventoryId) onDeleteItem;
+  final VoidCallback onClearAll;
 
   const InventoryPage({
     super.key,
-    required this.inventoryItems,
-    required this.onAddItem,
-    required this.onUpdateInventory,
+    required this.inventory,
+    required this.onAddNewItem,
+    required this.onUpdateItem,
+    required this.onDeleteItem,
+    required this.onClearAll,
   });
 
   @override
@@ -108,7 +113,7 @@ class InventoryPageState extends State<InventoryPage>
         MaterialPageRoute(builder: (context) => const CameraScannerPage()),
       );
       if (newItem != null) {
-        widget.onAddItem(newItem);
+        widget.onAddNewItem(newItem);
       }
     }
   }
@@ -144,23 +149,24 @@ class InventoryPageState extends State<InventoryPage>
 
   // Show dialog to delete a specific quantity of an item
   Future<void> showDeleteDialog(BuildContext context, int index) async {
-    final item = widget.inventoryItems[index];
-    // Show delete quantity dialog
+    final inventoryItem = widget.inventory[index];
+    final foodItem = inventoryItem.foodItem; // Get the nested food item
+
     final double? gramsToDelete = await showDialog<double>(
       context: context,
-      builder: (context) => DeleteQuantity(item: item),
+      builder: (context) =>
+          DeleteQuantity(item: foodItem), // Pass the FoodItem to the dialog
     );
+
     if (gramsToDelete != null && gramsToDelete > 0) {
-      final newGrams = item.inventoryGrams - gramsToDelete;
-      List<FoodItem> updatedList = List.from(widget.inventoryItems);
+      final newGrams = foodItem.inventoryGrams - gramsToDelete;
       if (newGrams > 0.1) {
-        // Update item with new grams
-        updatedList[index] = item.copyWith(inventoryGrams: newGrams);
+        // It's an UPDATE
+        widget.onUpdateItem(inventoryItem.id, newGrams);
       } else {
-        // Remove item if quantity is too low
-        updatedList.removeAt(index);
+        // It's a DELETE
+        widget.onDeleteItem(inventoryItem.id);
       }
-      widget.onUpdateInventory(updatedList);
     }
   }
 
@@ -186,7 +192,7 @@ class InventoryPageState extends State<InventoryPage>
       ),
     );
     if (confirmClear == true) {
-      widget.onUpdateInventory([]); // Clear inventory list
+      widget.onClearAll(); // Clear inventory list
       await InventoryStorageService.clearInventory(); // Clear stored inventory
     }
   }
@@ -201,7 +207,7 @@ class InventoryPageState extends State<InventoryPage>
         ),
         centerTitle: true,
         actions: [
-          if (widget.inventoryItems.isNotEmpty)
+          if (widget.inventory.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.delete_sweep_outlined),
               onPressed: () =>
@@ -212,7 +218,7 @@ class InventoryPageState extends State<InventoryPage>
       ),
       body: Stack(
         children: [
-          widget.inventoryItems.isEmpty
+          widget.inventory.isEmpty
               ? buildEmptyState() // Display empty state
               : buildInventoryList(context), // Display inventory list
           if (isSearchVisible) buildSearchOverlay(), // Display search overlay
@@ -226,9 +232,10 @@ class InventoryPageState extends State<InventoryPage>
   Widget buildInventoryList(BuildContext context) {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 80),
-      itemCount: widget.inventoryItems.length,
+      itemCount: widget.inventory.length,
       itemBuilder: (context, index) {
-        final item = widget.inventoryItems[index];
+        final inventoryItem = widget.inventory[index];
+        final item = inventoryItem.foodItem;
 
         final subtitle = [
           if (item.brand.isNotEmpty && item.brand != 'N/A')
@@ -251,16 +258,19 @@ class InventoryPageState extends State<InventoryPage>
               if (result is Map && result['type'] == 'update') {
                 // Update item in inventory
                 final updatedItem = result['item'] as FoodItem;
-                final idx = widget.inventoryItems.indexWhere(
-                  (i) => i.barcode == updatedItem.barcode,
+                final idx = widget.inventory.indexWhere(
+                  (i) => i.foodItem.barcode == updatedItem.barcode,
                 );
                 if (idx != -1) {
-                  List<FoodItem> updatedList = List.from(widget.inventoryItems);
-                  updatedList[idx] = updatedItem;
-                  widget.onUpdateInventory(updatedList);
+                  // Update the existing InventoryModel with the new FoodItem data
+                  final existingInventoryModel = widget.inventory[idx];
+                  widget.onUpdateItem(
+                    existingInventoryModel.id,
+                    updatedItem.inventoryGrams,
+                  );
                 }
               } else if (result is FoodItem) {
-                widget.onAddItem(result); // Add new item to inventory
+                widget.onAddNewItem(result); // Add new item to inventory
               }
             },
             leading: Hero(
@@ -410,7 +420,7 @@ class InventoryPageState extends State<InventoryPage>
                                   ),
                                 );
                                 if (result != null) {
-                                  widget.onAddItem(
+                                  widget.onAddNewItem(
                                     result,
                                   ); // Add item to inventory
                                 }

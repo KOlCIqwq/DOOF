@@ -7,6 +7,7 @@ import '../models/food_item.dart';
 import '../widgets/product_preview_widget.dart';
 import 'product_detail_page.dart';
 import '../services/open_food_facts_api_service.dart';
+import '../services/user_service.dart';
 
 class CameraScannerPage extends StatefulWidget {
   const CameraScannerPage({super.key});
@@ -22,29 +23,31 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   static const platform = MethodChannel('barcode_scanner');
   String? _errorMessage;
   int _frameSkipCounter = 0;
-  bool _isHandlingResult = false;
+  bool isHandlingResult = false;
 
   FoodItem? _scannedProduct;
-  late AnimationController _slideController;
+  late AnimationController slideController;
   late Animation<Offset> _slideAnimation;
+
+  final UserService userService = UserService();
 
   @override
   void initState() {
     super.initState();
-    _slideController = AnimationController(
+    slideController = AnimationController(
       duration: const Duration(milliseconds: 500),
       vsync: this,
     );
     _slideAnimation =
         Tween<Offset>(begin: const Offset(0, 1.5), end: Offset.zero).animate(
-          CurvedAnimation(parent: _slideController, curve: Curves.easeOutBack),
+          CurvedAnimation(parent: slideController, curve: Curves.easeOutBack),
         );
     WidgetsBinding.instance.addPostFrameCallback((_) => initializeCamera());
   }
 
   @override
   void dispose() {
-    _slideController.dispose();
+    slideController.dispose();
     _controller?.stopImageStream();
     _controller?.dispose();
     super.dispose();
@@ -78,14 +81,14 @@ class _CameraScannerPageState extends State<CameraScannerPage>
     }
   }
 
-  // Fetch product details from Open Food Facts API
+  /// Fetch product details from Open Food Facts API
   Future<FoodItem?> fetchProduct(String barcode) async {
     return await OpenFoodFactsApiService.fetchFoodItem(barcode);
   }
 
-  // Process camera image frames for barcode detection
+  /// Process camera image frames for barcode detection
   void processImage(CameraImage image) async {
-    if (_isHandlingResult || _isProcessing) return;
+    if (isHandlingResult || _isProcessing) return;
     _frameSkipCounter++;
     if (_frameSkipCounter % 5 != 0) return; // Process every 5th frame
     _isProcessing = true;
@@ -101,7 +104,7 @@ class _CameraScannerPageState extends State<CameraScannerPage>
       });
 
       if (barcode != null && barcode.isNotEmpty && mounted) {
-        setState(() => _isHandlingResult = true);
+        setState(() => isHandlingResult = true);
         HapticFeedback.lightImpact(); // Provide haptic feedback
 
         FoodItem? product = await fetchProduct(barcode);
@@ -124,9 +127,16 @@ class _CameraScannerPageState extends State<CameraScannerPage>
           expirationDate: null,
         );
 
+        try {
+          await userService.upsertFoodItem(product);
+        } catch (e) {
+          // If this fails (e.g., user is offline), don't block the UI.
+          debugPrint("Failed to immediately save food item to Supabase: $e");
+        }
+
         if (!mounted) return;
         setState(() => _scannedProduct = product);
-        _slideController.forward(); // Animate product preview in
+        slideController.forward(); // Animate product preview in
       }
     } catch (e) {
       debugPrint('Error processing image: $e');
@@ -135,27 +145,27 @@ class _CameraScannerPageState extends State<CameraScannerPage>
     }
   }
 
-  // Reset the scanner state and clear scanned product
+  /// Reset the scanner state and clear scanned product
   void resetScanner() {
     if (mounted) {
       setState(() {
         _scannedProduct = null;
-        _isHandlingResult = false;
+        isHandlingResult = false;
       });
     }
   }
 
-  // Add the scanned product to inventory and navigate back
+  /// Add the scanned product to inventory and navigate back
   void addToInventory() {
     if (_scannedProduct != null) Navigator.pop(context, _scannedProduct);
   }
 
-  // Dismiss product preview and restart scanning
+  /// Dismiss product preview and restart scanning
   void dismissPreviewAndRescan() {
-    _slideController.reverse().then((_) => resetScanner());
+    slideController.reverse().then((_) => resetScanner());
   }
 
-  // View details of the scanned product
+  /// View details of the scanned product
   void viewDetails() async {
     if (_scannedProduct == null) return;
     final result = await Navigator.push<FoodItem>(
@@ -196,7 +206,7 @@ class _CameraScannerPageState extends State<CameraScannerPage>
           if (_isInitialized)
             CustomPaint(painter: ScannerOverlayPainter(), size: Size.infinite),
           // Loading indicator while fetching product
-          if (_isHandlingResult && _scannedProduct == null)
+          if (isHandlingResult && _scannedProduct == null)
             Container(
               color: Colors.black.withOpacity(0.5),
               child: const Center(
