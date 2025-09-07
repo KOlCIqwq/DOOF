@@ -26,7 +26,7 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   List<InventoryModel> inventoryItems = [];
-  List<String> inventoryRowsToDelete = [];
+  List<InventoryModel> inventoryItemsToDelete = [];
   List<ConsumptionLog> consumptionHistory = [];
   List<DailyStatsSummary> dailySummaries = [];
   bool _isLoading = true;
@@ -147,11 +147,19 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
           activity: profileHistory!.activity.index,
           phase: profileHistory!.phase.index,
         );
-        if (inventoryRowsToDelete.isNotEmpty) {
-          await UserService().deleteInventoryItems(
-            itemIds: inventoryRowsToDelete,
-          );
-        }
+        final currentFoodItems = inventoryItems.map(
+          (invModel) => invModel.foodItem,
+        );
+
+        final deletedFoodItems = inventoryItemsToDelete.map(
+          (invModel) => invModel.foodItem,
+        );
+
+        // Combine them into a single list. Using a Set removes duplicates by barcode.
+        final allFoodItemsToSync = {
+          ...currentFoodItems,
+          ...deletedFoodItems,
+        }.toList();
 
         /* // Try to sync the items offline
         final allLocalFoodItems = inventoryItems
@@ -159,11 +167,16 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
             .toList();
 
         await UserService().upsertFoodItems(allLocalFoodItems); */
+        // Ensure all parent records exist in 'foodItems'.
+        if (allFoodItemsToSync.isNotEmpty) {
+          await UserService().upsertFoodItems(allFoodItemsToSync);
+        }
 
-        if (inventoryRowsToDelete.isNotEmpty) {
-          await UserService().deleteInventoryItems(
-            itemIds: inventoryRowsToDelete,
-          );
+        final itemIdsToDelete = inventoryItemsToDelete
+            .map((invModel) => invModel.id)
+            .toList();
+        if (itemIdsToDelete.isNotEmpty) {
+          await UserService().deleteInventoryItems(itemIds: itemIdsToDelete);
         }
 
         // Upsert the entire local inventory.
@@ -175,7 +188,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
 
       setState(() {
         isDataDirty = false;
-        inventoryRowsToDelete.clear();
+        inventoryItemsToDelete.clear();
       });
     } catch (e) {
       showErrorSnackbar("Can't sync:$e");
@@ -276,22 +289,22 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     });
   }
 
-  void _deleteItemFromInventory(String inventoryId) {
+  void deleteItemFromInventory(String inventoryId) {
     setState(() {
-      // Add the ID to our delete list for the sync process
-      inventoryRowsToDelete.add(inventoryId);
-      // Remove it from the live list so the UI updates
-      inventoryItems.removeWhere((item) => item.id == inventoryId);
-      setDirty();
+      final index = inventoryItems.indexWhere((item) => item.id == inventoryId);
+      if (index != -1) {
+        // Add the entire model to our new delete list
+        inventoryItemsToDelete.add(inventoryItems[index]);
+        inventoryItems.removeAt(index);
+        setDirty();
+      }
     });
   }
 
   void _clearAllInventory() {
     setState(() {
       // Add all current inventory IDs to the delete list
-      for (final item in inventoryItems) {
-        inventoryRowsToDelete.add(item.id);
-      }
+      inventoryItemsToDelete.addAll(inventoryItems);
       // Clear the live list
       inventoryItems.clear();
       setDirty();
@@ -334,12 +347,15 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       );
       if (itemIndex != -1) {
         final currentItem = inventoryItems[itemIndex];
-        final newGrams = currentItem.quantity - gramsToConsume;
+        final newGrams = currentItem.foodItem.inventoryGrams - gramsToConsume;
         if (newGrams > 0.1) {
-          inventoryItems[itemIndex] = currentItem.copyWith(quantity: newGrams);
+          // Create updated foodItem with new quantity, use to create updated inventoryItem
+          inventoryItems[itemIndex] = currentItem.copyWith(
+            foodItem: currentItem.foodItem.copyWith(inventoryGrams: newGrams),
+          );
         } else {
           // Remove item if grams are too low
-          inventoryItems.removeAt(itemIndex);
+          deleteItemFromInventory(currentItem.id);
         }
       }
     });
@@ -412,7 +428,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   Future<void> showConsumeDialog() async {
     // Filter for consumable items
     final consumableItems = inventoryItems
-        .where((item) => item.quantity > 0)
+        .where((item) => item.foodItem.inventoryGrams > 0)
         .toList();
     if (consumableItems.isEmpty) {
       showErrorSnackbar("No consumable items in inventory.");
@@ -471,7 +487,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                   inventory: inventoryItems,
                   onAddNewItem: _addNewItemToInventory,
                   onUpdateItem: _updateItemQuantity,
-                  onDeleteItem: _deleteItemFromInventory,
+                  onDeleteItem: deleteItemFromInventory,
                   onClearAll: _clearAllInventory,
                 ),
                 // Recipe page

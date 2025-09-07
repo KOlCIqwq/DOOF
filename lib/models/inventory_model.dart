@@ -7,14 +7,12 @@ class InventoryModel {
   final String id; // The id of the row in userItems
   final String userId;
   final String foodId;
-  final double quantity; // Assuming this maps to grams or a count
   final FoodItem foodItem; // The full, nested FoodItem object
 
   InventoryModel({
     required this.id,
     required this.userId,
     required this.foodId,
-    required this.quantity,
     required this.foodItem,
   });
 
@@ -38,12 +36,15 @@ class InventoryModel {
       );
     }
 
+    final baseFoodItem = FoodItem.fromJson(foodData);
+    final correctQuantity = (json['quantity'] as num? ?? 0.0).toDouble();
+
     return InventoryModel(
       id: json['id'] ?? '',
       userId: json['user_id'] ?? '',
       foodId: json['food_id'] ?? '',
-      quantity: (json['quantity'] as num? ?? 0.0).toDouble(),
-      foodItem: FoodItem.fromJson(foodData),
+
+      foodItem: baseFoodItem.copyWith(inventoryGrams: correctQuantity),
     );
   }
 
@@ -56,7 +57,6 @@ class InventoryModel {
       id: uuid.v4(),
       userId: userId,
       foodId: item.barcode, // The barcode serves as the food_id
-      quantity: item.inventoryGrams,
       foodItem: item,
     );
   }
@@ -72,7 +72,6 @@ class InventoryModel {
       id: id ?? this.id,
       userId: userId ?? this.userId,
       foodId: foodId ?? this.foodId,
-      quantity: quantity ?? this.quantity,
       foodItem: foodItem ?? this.foodItem,
     );
   }

@@ -139,10 +139,11 @@ class _CameraScannerPageState extends State<CameraScannerPage>
           await userService.upsertFoodItem(product);
           //showErrorSnackbar("immediately save food item to Supabase:");
         } catch (e) {
-          // If this fails (e.g., user is offline), don't block the UI.
-          showErrorSnackbar(
+          // If this fails
+          /* showErrorSnackbar(
             "Failed to immediately save food item to Supabase: $e",
-          );
+          ); */
+          // Scanning twice the same product will result an error, don't display it
         }
 
         if (!mounted) return;
