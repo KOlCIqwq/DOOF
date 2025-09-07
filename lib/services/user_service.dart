@@ -166,8 +166,7 @@ class UserService {
 
   /// Update only the quantity for a food item in a user’s inventory
   Future<void> updateQuantity({
-    required String userId,
-    required String foodId,
+    required String userItemId,
     required int quantity,
   }) async {
     await supabase
@@ -176,8 +175,7 @@ class UserService {
           'quantity': quantity,
           'updated_at': DateTime.now().toIso8601String(),
         })
-        .eq('user_id', userId)
-        .eq('item_barcode', foodId);
+        .eq('id', userItemId);
   }
 
   /// Deletes a list of inventory items by their unique row IDs.
