@@ -5,7 +5,7 @@ DOOF is a Flutter-based barcode scanner application designed to help users effic
 [Download]()
 
 ## Motivation
-Through a friend’s recommendation I stumbled upon a barcode scanning applicatio. While useful, I noticed that the application only offered a simple “healthy or not” evaluation of food products. 
+Through a friend’s recommendation I stumbled upon a barcode scanning application. While useful, I noticed that the application only offered a simple “healthy or not” evaluation of food products. 
 
 So why not build an application that combines barcode scanning with food inventory management and personal health tracking?
 
