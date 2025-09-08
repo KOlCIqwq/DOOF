@@ -8,8 +8,8 @@ authenticated -> profile
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:food/pages/login_page.dart';
-import 'package:food/pages/main_page.dart';
+import 'package:DOOF/pages/login_page.dart';
+import 'package:DOOF/pages/main_page.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
