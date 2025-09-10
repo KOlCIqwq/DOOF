@@ -86,7 +86,7 @@ class _DeleteQuantityDialogState extends State<DeleteQuantity> {
     final double maxSliderValue = _mode == DeletionMode.byUnit
         ? maxUnits
         : maxGrams;
-    final String currentUnit = _mode == DeletionMode.byUnit ? _unit : 'g';
+    final String currentUnit = _mode == DeletionMode.byUnit ? _unit : 'Unit';
 
     return AlertDialog(
       title: Text('Delete ${widget.item.name}'),

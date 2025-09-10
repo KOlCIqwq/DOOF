@@ -58,7 +58,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     // Save data when app is paused or detached
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      _saveAllData();
+      saveAllData();
       syncAllDataToSupabase();
     }
   }
@@ -103,7 +103,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       });
 
       // Process and save previous day's statistics
-      await _processAndSavePreviousDayStats();
+      await processAndSavePreviousDayStats();
 
       // Set loading state to false
       setState(() {
@@ -117,7 +117,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   }
 
   // Save all current data to storage
-  Future<void> _saveAllData() async {
+  Future<void> saveAllData() async {
     await InventoryStorageService.saveInventory(inventoryItems);
     await ConsumptionStorageService.saveConsumptionLog(consumptionHistory);
     await DailyStatsStorageService.saveDailyStats(dailySummaries);
@@ -200,7 +200,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   }
 
   // Process and save statistics for the previous day if not already summarized
-  Future<void> _processAndSavePreviousDayStats() async {
+  Future<void> processAndSavePreviousDayStats() async {
     final now = DateTime.now();
     final today = DateUtils.dateOnly(now);
     final yesterday = today.subtract(const Duration(days: 1));
@@ -284,8 +284,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     });
   }
 
-  // Update the entire inventory list
-  void _updateItemQuantity(String inventoryId, double newGrams) {
+  // Update the entire inventory list, setting dirty
+  void updateItemQuantity(String inventoryId, double newGrams) {
     setState(() {
       final index = inventoryItems.indexWhere((item) => item.id == inventoryId);
       if (index != -1) {
@@ -343,7 +343,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     });
   }
 
-  void _clearAllInventory() {
+  void clearAllInventory() {
     setState(() {
       // Add all current inventory IDs to the delete list
       inventoryItemsToDelete.addAll(inventoryItems);
@@ -362,11 +362,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   }
 
   // Log a food item consumption
-  void _logConsumption(
-    FoodItem item,
-    double gramsToConsume,
-    MealType mealType,
-  ) {
+  void logConsumption(FoodItem item, double gramsToConsume, MealType mealType) {
     final Map<String, double> consumedNutrients = {};
     final nutrientsPer100g = item.nutriments;
     // Calculate consumed nutrients based on grams
@@ -389,37 +385,40 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       categories: item.categories,
       expirationDate: item.expirationDate,
     );
-    setState(() {
-      consumptionHistory.insert(0, log);
-      // Update inventory item quantity
-      final itemIndex = inventoryItems.indexWhere(
-        (i) => i.foodItem.barcode == item.barcode,
-      );
-      if (itemIndex != -1) {
-        final currentItem = inventoryItems[itemIndex];
-        final newGrams = currentItem.foodItem.inventoryGrams - gramsToConsume;
-        if (newGrams > 0.1) {
-          // Create updated foodItem with new quantity, use to create updated inventoryItem
-          inventoryItems[itemIndex] = currentItem.copyWith(
-            foodItem: currentItem.foodItem.copyWith(inventoryGrams: newGrams),
-          );
-        } else {
-          // Remove item if grams are too low
-          deleteItemFromInventory(currentItem.id);
-        }
+
+    final itemIndex = inventoryItems.indexWhere(
+      (i) => i.foodItem.barcode == item.barcode,
+    );
+
+    if (itemIndex != -1) {
+      final inventoryItem = inventoryItems[itemIndex];
+      final newGram = inventoryItem.foodItem.inventoryGrams - gramsToConsume;
+
+      if (newGram >= 0.1) {
+        // Enough quantity to consume
+        updateItemQuantity(inventoryItem.id, newGram);
+      } else {
+        // Finish all the food
+        deleteItemFromInventory(inventoryItem.id);
       }
-    });
-    _saveAllData(); // Persist changes
-    showErrorSnackbar('Consumption logged!'); // Show success
+      // Set the consumption history
+      setState(() {
+        consumptionHistory.insert(0, log);
+      });
+      showErrorSnackbar('Consumption logged!'); // Show success
+    } else {
+      showErrorSnackbar("Item not found in the inventory???");
+    }
+    saveAllData(); // Persist changes
   }
 
   // Log a recipe consumption
-  void _logRecipeConsumption(RecipeInfo recipe, MealType mealType) {
+  void logRecipeConsumption(RecipeInfo recipe, MealType mealType) {
     final Map<String, double> consumedNutrients = {};
     if (recipe.nutrients.isNotEmpty) {
       // Map Spoonacular nutrients to Open Food Facts keys
       recipe.nutrients.forEach((name, amount) {
-        final key = _mapSpoonacularToOff(name);
+        final key = mapSpoonacularToOff(name);
         if (key != null) {
           consumedNutrients[key] = amount;
         }
@@ -441,13 +440,13 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       // Navigate to stats page
       _pageController.jumpToPage(2);
     });
-    _saveAllData(); // Persist changes
+    saveAllData(); // Persist changes
     showErrorSnackbar(
       '${recipe.title} logged as ${mealType.name}!',
     ); // Show success
   }
 
-  void _handleProfileUpdate(ProfileModel updatedProfile) {
+  void handleProfileUpdate(ProfileModel updatedProfile) {
     setState(() {
       profileHistory = updatedProfile;
       isDataDirty = true; // Mark data as dirty
@@ -455,7 +454,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   }
 
   // Map Spoonacular nutrient names to Open Food Facts keys
-  String? _mapSpoonacularToOff(String name) {
+  String? mapSpoonacularToOff(String name) {
     final map = {
       'Calories': 'energy-kcal',
       'Fat': 'fat',
@@ -490,7 +489,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       isScrollControlled: true,
       builder: (context) => ConsumeDialog(
         inventoryItems: consumableItems.map((item) => item.foodItem).toList(),
-        onConsume: _logConsumption,
+        onConsume: logConsumption,
       ),
     );
   }
@@ -536,12 +535,12 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                 InventoryPage(
                   inventory: inventoryItems,
                   onAddNewItem: addNewItemToInventory,
-                  onUpdateItem: _updateItemQuantity,
+                  onUpdateItem: updateItemQuantity,
                   onDeleteItem: deleteItemFromInventory,
-                  onClearAll: _clearAllInventory,
+                  onClearAll: clearAllInventory,
                 ),
                 // Recipe page
-                RecipePage(onRecipeConsumed: _logRecipeConsumption),
+                RecipePage(onRecipeConsumed: logRecipeConsumption),
                 // Stats page
                 StatsPage(
                   inventoryItems: inventoryItems
@@ -553,7 +552,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                 // Account page
                 ProfilePage(
                   profile: profileHistory,
-                  onProfileChanged: _handleProfileUpdate,
+                  onProfileChanged: handleProfileUpdate,
                 ),
               ],
             ),
