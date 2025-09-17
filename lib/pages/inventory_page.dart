@@ -11,6 +11,7 @@ import '../widgets/delete_quantity.dart';
 import 'camera_scanner_page.dart';
 import 'product_detail_page.dart';
 import '../models/inventory_model.dart';
+import '../services/user_service.dart';
 
 class InventoryPage extends StatefulWidget {
   final List<InventoryModel> inventory;
@@ -42,6 +43,8 @@ class InventoryPageState extends State<InventoryPage>
   List<FoodItem> searchResults = [];
   bool isSearching = false;
   Timer? debounce;
+
+  final UserService userService = UserService();
 
   @override
   void initState() {
@@ -139,6 +142,11 @@ class InventoryPageState extends State<InventoryPage>
     });
     // Call API to search products
     final results = await OpenFoodFactsApiService.searchProductsByName(query);
+    // After searching we should also insert into table
+    // TODO: Think a better solution, because this will slow down the search A LOT
+    /* for (var product in results) {
+      await userService.upsertFoodItem(product);
+    } */
     if (mounted) {
       setState(() {
         searchResults = results;

@@ -37,7 +37,7 @@ class FoodItem {
   double get gramsPerUnit {
     final (value, unit) = QuantityParser.parse(packageSize);
     if (value <= 0) return 100.0;
-    return QuantityParser.toGrams((value, unit));
+    return QuantityParser.getVal((value, unit));
   }
 
   // The calculated quantity available, as a decimal (e.g., 2.5 units).

@@ -1,3 +1,4 @@
+import 'package:DOOF/utils/quantity_parser.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../models/food_item.dart';
@@ -40,11 +41,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     super.dispose();
   }
 
-  Future<void> _handleAdjustPackageSize() async {
+  Future<void> handleAdjustPackageSize() async {
     await _controller.adjustPackageSize(context);
   }
 
-  void _handleUpdateRemainingGrams() {
+  void handleUpdateRemainingGrams() {
     _controller.updateRemainingGrams();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -84,8 +85,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   product: product,
                   remainingGramsController:
                       _controller.remainingGramsController,
-                  onAdjustPackageSize: _handleAdjustPackageSize,
-                  onUpdateRemainingGrams: _handleUpdateRemainingGrams,
+                  onAdjustPackageSize: handleAdjustPackageSize,
+                  onUpdateRemainingGrams: handleUpdateRemainingGrams,
                 ),
                 if (product.isKnown) ...[
                   _buildModeSwitcher(),
@@ -375,7 +376,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           Expanded(
             child: ElevatedButton.icon(
               onPressed: () {
-                final gramsToAdd = _selectedQuantity * product.gramsPerUnit;
+                final String packageSize = product.packageSize;
+                final sizeValue = QuantityParser.getVal(
+                  QuantityParser.parse(packageSize),
+                );
+                final gramsToAdd = _selectedQuantity * sizeValue;
                 final itemToAdd = product.copyWith(
                   inventoryGrams: gramsToAdd,
                   insertDate: DateTime.now(),

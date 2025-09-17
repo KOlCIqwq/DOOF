@@ -22,7 +22,8 @@ class OpenFoodFactsApiService {
         final packageSize = product.quantity?.isNotEmpty == true
             ? product.quantity!
             : '100 g';
-        final initialGrams = QuantityParser.toGrams(
+        // Parse the package size to correct init quantity
+        final initialGrams = QuantityParser.getVal(
           QuantityParser.parse(packageSize),
         );
 
@@ -37,7 +38,7 @@ class OpenFoodFactsApiService {
               : null,
           categories: product.categories ?? '',
           packageSize: packageSize,
-          inventoryGrams: initialGrams > 0 ? initialGrams : 100.0,
+          inventoryGrams: initialGrams,
           nutriments: nutrimentsJson,
           fat: (nutrimentsJson['fat_100g'] as num?)?.toDouble() ?? 0.0,
           carbs:
@@ -80,7 +81,7 @@ class OpenFoodFactsApiService {
               final packageSize = product.quantity?.isNotEmpty == true
                   ? product.quantity!
                   : '100 g';
-              final initialGrams = QuantityParser.toGrams(
+              final initialGrams = QuantityParser.getVal(
                 QuantityParser.parse(packageSize),
               );
 
