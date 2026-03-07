@@ -553,6 +553,10 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                 ProfilePage(
                   profile: profileHistory,
                   onProfileChanged: handleProfileUpdate,
+                  onSyncRequested: () async {
+                    await saveAllData(); // Save locally
+                    await syncAllDataToSupabase(); // then sync with DB
+                  },
                 ),
               ],
             ),

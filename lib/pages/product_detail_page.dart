@@ -6,6 +6,7 @@ import '../utils/nutrient_helper.dart';
 import '../widgets/product_detail/product_detail_header.dart';
 import '../widgets/product_detail/product_summary.dart';
 import 'product_detail_controller.dart';
+import 'custom_product_page.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final FoodItem product;
@@ -41,10 +42,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     super.dispose();
   }
 
-  Future<void> handleAdjustPackageSize() async {
-    await _controller.adjustPackageSize(context);
-  }
-
   void handleUpdateRemainingGrams() {
     _controller.updateRemainingGrams();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -53,6 +50,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         backgroundColor: Colors.green,
       ),
     );
+  }
+
+  Future<void> openEditForm() async {
+    final updatedItem = await Navigator.push<FoodItem>(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            CustomProductPage(initialItem: _controller.product),
+      ),
+    );
+
+    if (updatedItem != null) {
+      setState(() {
+        // Update the controller with the newly edited item
+        _controller.updateFromEdit(
+          updatedItem,
+        ); // Re-initialize the display text controllers
+      });
+    }
   }
 
   @override
@@ -66,13 +82,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
     return PopScope(
       canPop: false, // Prevents default back navigation.
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         // When back is pressed, pop with the updated item if it exists.
-        final result = _controller.finalProduct != null
+        final popResult = _controller.finalProduct != null
             ? {'type': 'update', 'item': _controller.finalProduct}
             : null;
-        Navigator.pop(context, result);
+        Navigator.pop(context, popResult);
       },
 
       child: Scaffold(
@@ -85,8 +101,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   product: product,
                   remainingGramsController:
                       _controller.remainingGramsController,
-                  onAdjustPackageSize: handleAdjustPackageSize,
                   onUpdateRemainingGrams: handleUpdateRemainingGrams,
+                  openEditForm: openEditForm,
                 ),
                 if (product.isKnown) ...[
                   _buildModeSwitcher(),
@@ -130,6 +146,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     return SliverAppBar(
       expandedHeight: 220.0,
       pinned: true,
+      leadingWidth: 100,
+      leading: Row(children: [const BackButton()]),
       flexibleSpace: FlexibleSpaceBar(
         background: Hero(
           tag: '${product.barcode}-${product.packageSize}',
@@ -173,7 +191,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
+                color: Colors.green.withValues(alpha: .1),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
@@ -225,7 +243,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               ),
               trailing: Text(value, style: const TextStyle(fontSize: 15)),
             );
-          }).toList(),
+          }),
         ],
       ),
     );
@@ -362,7 +380,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.3),
+            color: Colors.grey.withValues(alpha: .3),
             spreadRadius: 1,
             blurRadius: 5,
             offset: const Offset(0, -2),

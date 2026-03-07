@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/food_item.dart';
 import '../utils/quantity_parser.dart';
-import '../widgets/adjust_package_size_dialog.dart';
 
 // Handles the state and logic for the ProductDetailPage.
 class ProductDetailController {
@@ -28,6 +27,17 @@ class ProductDetailController {
     product = initialProduct;
     _initializeRemainingGramsController();
     _initializeModes();
+  }
+
+  void updateFromEdit(FoodItem newItem) {
+    product = newItem;
+    _updatedProduct = newItem; // Save it so it returns to the MainPage properly
+
+    // Recalculate controllers and modes based on the new data
+    _initializeRemainingGramsController();
+    _initializeModes();
+
+    onStateUpdate(); // Trigger the UI rebuild
   }
 
   // Populates the list of available nutrient modes (e.g., "per 100g", "per serving").
@@ -62,28 +72,6 @@ class ProductDetailController {
     remainingGramsController = TextEditingController(
       text: displayValue.toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), ''),
     );
-  }
-
-  // Shows a dialog to change the package size and returns the updated item.
-  Future<void> adjustPackageSize(BuildContext context) async {
-    final newSize = await showDialog<String>(
-      context: context,
-      builder: (_) =>
-          AdjustPackageSizeDialog(initialValue: product.packageSize),
-    );
-
-    if (newSize != null && newSize.isNotEmpty) {
-      final newGramsPerUnit = QuantityParser.toGrams(
-        QuantityParser.parse(newSize),
-      );
-      product = product.copyWith(
-        packageSize: newSize,
-        inventoryGrams: newGramsPerUnit,
-      );
-      _updatedProduct = product;
-      _initializeRemainingGramsController(); // Recalculate display value.
-      onStateUpdate(); // Rebuild the UI.
-    }
   }
 
   // Parses user input for remaining amount and updates the state.

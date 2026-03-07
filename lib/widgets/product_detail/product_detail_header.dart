@@ -8,15 +8,15 @@ import '../../utils/quantity_parser.dart';
 class ProductDetailHeader extends StatelessWidget {
   final FoodItem product;
   final TextEditingController remainingGramsController;
-  final VoidCallback onAdjustPackageSize;
   final VoidCallback onUpdateRemainingGrams;
+  final VoidCallback openEditForm;
 
   const ProductDetailHeader({
     super.key,
     required this.product,
     required this.remainingGramsController,
-    required this.onAdjustPackageSize,
     required this.onUpdateRemainingGrams,
+    required this.openEditForm,
   });
 
   @override
@@ -27,10 +27,30 @@ class ProductDetailHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            product.name,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Flexible(
+                // Use Flexible so long text wraps instead of overflowing
+                child: Text(
+                  product.name,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit),
+                tooltip: 'Edit Details',
+                onPressed: openEditForm,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
           ),
+
           const SizedBox(height: 4),
           if (product.brand.isNotEmpty && product.brand != 'N/A')
             Text(
@@ -65,14 +85,6 @@ class ProductDetailHeader extends StatelessWidget {
               Text(
                 product.packageSize,
                 style: const TextStyle(fontSize: 16, color: Colors.black54),
-              ),
-              IconButton(
-                onPressed: onAdjustPackageSize,
-                icon: const Icon(
-                  Icons.edit_outlined,
-                  size: 20,
-                  color: Colors.grey,
-                ),
               ),
             ],
           ),

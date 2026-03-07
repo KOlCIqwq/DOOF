@@ -28,9 +28,11 @@ class RegisterPageState extends State<RegisterPage> {
     }
 
     try {
-      authService.signUpWithEmailPassword(email, pass);
+      await authService.signUpWithEmailPassword(email, pass);
 
-      Navigator.pop(context); // Pop when finished sign up
+      if (mounted) {
+        Navigator.pop(context);
+      } // Pop when finished sign up
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(

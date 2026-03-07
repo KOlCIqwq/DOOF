@@ -7,11 +7,13 @@ import '../auth/auth_service.dart';
 class ProfilePage extends StatefulWidget {
   final ProfileModel? profile;
   final ValueChanged<ProfileModel> onProfileChanged;
+  final VoidCallback onSyncRequested;
 
   const ProfilePage({
     super.key,
     required this.profile,
     required this.onProfileChanged,
+    required this.onSyncRequested,
   });
 
   @override
@@ -34,6 +36,12 @@ class ProfilePageState extends State<ProfilePage> {
 
   void logout() async {
     await authService.signOut();
+  }
+
+  void saveInfo() async {
+    // When saving the info, let it be handled in update
+    handleUpdate();
+    widget.onSyncRequested();
   }
 
   @override
@@ -424,6 +432,11 @@ class ProfilePageState extends State<ProfilePage> {
         ),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.check), // Confirm button
+            tooltip: "Confirm",
+            onPressed: saveInfo,
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: logout,

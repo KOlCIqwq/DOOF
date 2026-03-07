@@ -22,7 +22,7 @@ class RecommendedIntakeHelper {
     required ActivityLevel activityLevel,
     required ActivityPhase activityPhase,
   }) {
-    final calories = BmiRecommendedIntake.calculateMaintenanceCalories(
+    final maintainCalories = BmiRecommendedIntake.calculateMaintenanceCalories(
       weight: weight,
       heightCm: heightCm,
       age: age,
@@ -30,14 +30,19 @@ class RecommendedIntakeHelper {
       activityLevel: activityLevel,
     );
 
+    final targetCalories = BmiRecommendedIntake.adjustCaloriesForPhase(
+      maintainCalories,
+      activityPhase,
+    );
+
     // You can make this activity-dependent later.
     final macros = BmiRecommendedIntake.calculateMacros(
-      calories: calories,
+      calories: targetCalories,
       activityLevel: activityLevel,
       phase: activityPhase,
     );
 
-    _dailyValues['energy-kcal'] = calories;
+    _dailyValues['energy-kcal'] = targetCalories;
     _dailyValues['proteins'] = macros['protein_g'] ?? 0;
     _dailyValues['fat'] = macros['fat_g'] ?? 0;
     _dailyValues['saturated-fat'] =

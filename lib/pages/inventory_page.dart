@@ -42,7 +42,6 @@ class InventoryPageState extends State<InventoryPage>
   final TextEditingController searchController = TextEditingController();
   List<FoodItem> searchResults = [];
   bool isSearching = false;
-  Timer? debounce;
 
   final UserService userService = UserService();
 
@@ -59,7 +58,6 @@ class InventoryPageState extends State<InventoryPage>
   void dispose() {
     fabAnimationController.dispose();
     searchController.dispose();
-    debounce?.cancel();
     super.dispose();
   }
 
@@ -119,14 +117,6 @@ class InventoryPageState extends State<InventoryPage>
         widget.onAddNewItem(newItem);
       }
     }
-  }
-
-  // Handle search query changes with debounce
-  void onSearchChanged(String query) {
-    if (debounce?.isActive ?? false) debounce!.cancel();
-    debounce = Timer(const Duration(milliseconds: 500), () {
-      performSearch(query); // Perform search after debounce
-    });
   }
 
   // Perform product search by name
@@ -205,34 +195,91 @@ class InventoryPageState extends State<InventoryPage>
     }
   }
 
+  void addCustomObject() async {
+    final templateItem = FoodItem(
+      barcode: 'custom_${DateTime.now().millisecondsSinceEpoch}',
+      name: 'New Custom Food',
+      brand: 'Custom',
+      imageUrl: '', // Blank image
+      insertDate: DateTime.now(),
+      nutriments: const {
+        'energy-kcal_100g': 0.0,
+        'proteins_100g': 0.0,
+        'carbohydrates_100g': 0.0,
+        'fat_100g': 0.0,
+      },
+      fat: 0,
+      carbs: 0,
+      protein: 0,
+      packageSize: '100 g',
+      inventoryGrams: 100.0,
+      categories: 'Custom',
+      isKnown:
+          true, // Forces it to render the UI instead of the "Unknown Product" view
+    );
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProductDetailPage(
+          product: templateItem,
+          showAddButton: true, // Shows the "Add to Inventory" bottom bar
+        ),
+      ),
+    );
+    if (result != null) {
+      FoodItem finalItem;
+
+      // Handle the return type depending on how your Add To Cart button pops the data
+      if (result is FoodItem) {
+        finalItem = result;
+      } else if (result is Map && result['item'] != null) {
+        finalItem = result['item'];
+      } else {
+        return; // Bail out if data is malformed
+      }
+
+      // Add it to the inventory list!
+      widget.onAddNewItem(finalItem);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'My Inventory',
-          style: TextStyle(fontWeight: FontWeight.bold),
+    return PopScope(
+      canPop: !isSearchVisible, // Don't pop when search is visible
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        // If the search overlay is open, close it!
+        if (isSearchVisible) {
+          closeSearch();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'My Inventory',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          centerTitle: true,
+          actions: [
+            if (widget.inventory.isNotEmpty)
+              IconButton(
+                icon: const Icon(Icons.delete_sweep_outlined),
+                onPressed: () => clearAllInventory(context),
+                tooltip: 'Clear All',
+              ),
+          ],
         ),
-        centerTitle: true,
-        actions: [
-          if (widget.inventory.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.delete_sweep_outlined),
-              onPressed: () =>
-                  clearAllInventory(context), // Clear all inventory
-              tooltip: 'Clear All',
-            ),
-        ],
+        body: Stack(
+          children: [
+            widget.inventory.isEmpty
+                ? buildEmptyState()
+                : buildInventoryList(context),
+            if (isSearchVisible) buildSearchOverlay(),
+          ],
+        ),
+        floatingActionButton: buildExpandingFab(),
       ),
-      body: Stack(
-        children: [
-          widget.inventory.isEmpty
-              ? buildEmptyState() // Display empty state
-              : buildInventoryList(context), // Display inventory list
-          if (isSearchVisible) buildSearchOverlay(), // Display search overlay
-        ],
-      ),
-      floatingActionButton: buildExpandingFab(), // Expanding FAB
     );
   }
 
@@ -359,7 +406,7 @@ class InventoryPageState extends State<InventoryPage>
           onTap: closeSearch, // Close search on tap outside
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5), // Blur background
-            child: Container(color: Colors.black.withOpacity(0.3)),
+            child: Container(color: Colors.black.withValues(alpha: .3)),
           ),
         ),
         SafeArea(
@@ -373,12 +420,44 @@ class InventoryPageState extends State<InventoryPage>
                   child: TextField(
                     controller: searchController,
                     autofocus: true,
+                    textInputAction: TextInputAction.search, // Enter to search
+                    onSubmitted: (value) =>
+                        performSearch(value), // Search on trigger
+
                     decoration: InputDecoration(
                       hintText: 'Search for a product...',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: closeSearch, // Close search button
+                      prefixIcon: IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        tooltip: 'Back',
+                        onPressed: closeSearch,
+                      ),
+                      suffixIcon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Clear Text Button
+                          IconButton(
+                            icon: const Icon(Icons.clear, color: Colors.grey),
+                            tooltip: 'Clear',
+                            onPressed: () {
+                              searchController.clear();
+                              setState(() {
+                                searchResults.clear();
+                              });
+                            },
+                          ),
+                          // Search Button
+                          IconButton(
+                            icon: const Icon(Icons.search, color: Colors.green),
+                            tooltip: 'Search',
+                            onPressed: () {
+                              FocusScope.of(
+                                context,
+                              ).unfocus(); // Hides keyboard
+                              performSearch(searchController.text);
+                            },
+                          ),
+                          const SizedBox(width: 4),
+                        ],
                       ),
                       filled: true,
                       fillColor: Colors.white,
@@ -387,7 +466,6 @@ class InventoryPageState extends State<InventoryPage>
                         borderSide: BorderSide.none,
                       ),
                     ),
-                    onChanged: onSearchChanged, // Handle search query changes
                   ),
                 ),
               ),
@@ -397,8 +475,49 @@ class InventoryPageState extends State<InventoryPage>
                         child: CircularProgressIndicator(),
                       ) // Loading indicator
                     : ListView.builder(
-                        itemCount: searchResults.length,
+                        itemCount:
+                            searchResults.length + 1, // last one to add custom
                         itemBuilder: (context, index) {
+                          if (index == searchResults.length) {
+                            return Card(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              color: Colors
+                                  .green
+                                  .shade50, // Slight green tint to stand out
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(
+                                  color: Colors.green.shade300,
+                                  width: 1,
+                                ),
+                              ),
+                              child: ListTile(
+                                leading: const Icon(
+                                  Icons.add_box,
+                                  size: 40,
+                                  color: Colors.green,
+                                ),
+                                title: const Text(
+                                  'Not found? Add it yourself',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                                subtitle: const Text(
+                                  'Create a custom food item',
+                                ),
+                                onTap: () {
+                                  closeSearch(); // Close the search overlay first
+                                  addCustomObject(); // Trigger your custom item flow
+                                },
+                              ),
+                            );
+                          }
                           final item = searchResults[index];
                           return Card(
                             margin: const EdgeInsets.symmetric(
@@ -475,6 +594,20 @@ class InventoryPageState extends State<InventoryPage>
                 heroTag: 'scan',
                 onPressed: scanBarcode, // Scan barcode
                 child: const Icon(Icons.qr_code_scanner), // Scan icon
+              ),
+            ),
+          ),
+        ),
+        FadeTransition(
+          opacity: fabAnimationController,
+          child: ScaleTransition(
+            scale: fabAnimationController,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: FloatingActionButton.small(
+                heroTag: 'addCustom',
+                onPressed: addCustomObject, // Scan barcode
+                child: const Icon(Icons.add), // Scan icon
               ),
             ),
           ),
