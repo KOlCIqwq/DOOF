@@ -38,6 +38,7 @@ class RecommendedIntakeHelper {
     // You can make this activity-dependent later.
     final macros = BmiRecommendedIntake.calculateMacros(
       calories: targetCalories,
+      weight: weight,
       activityLevel: activityLevel,
       phase: activityPhase,
     );

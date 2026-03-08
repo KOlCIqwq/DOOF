@@ -195,7 +195,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         inventoryItemsToDelete.clear();
       });
     } catch (e) {
-      showErrorSnackbar("Can't sync:$e");
+      showErrorSnackbar("Can't sync:");
     }
   }
 
@@ -513,9 +513,9 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   // Show an error snackbar message
   void showErrorSnackbar(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.red),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 

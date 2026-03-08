@@ -96,15 +96,46 @@ class BmiRecommendedIntake {
   /// Macro breakdown (20% protein, 30% fat, 50% carbs)
   static Map<String, double> calculateMacros({
     required double calories,
+    required double weight,
     required ActivityLevel activityLevel,
     required ActivityPhase phase,
   }) {
-    final pct = macroPercents(activityLevel: activityLevel, phase: phase);
-    return {
-      "protein_g": (calories * pct["protein"]!) / 4,
-      "carbs_g": (calories * pct["carbs"]!) / 4,
-      "fat_g": (calories * pct["fat"]!) / 9,
-    };
+    double proteinPerKg;
+    if (phase == ActivityPhase.cut) {
+      // Preserve muscle on a cut
+      proteinPerKg = activityLevel == ActivityLevel.heavyWorkout ? 2.2 : 2.0;
+    } else if (phase == ActivityPhase.bulk) {
+      // Less protein needed to spare muscle in a surplus
+      proteinPerKg = activityLevel == ActivityLevel.heavyWorkout ? 1.8 : 1.6;
+    } else {
+      // Maintenance
+      proteinPerKg = activityLevel == ActivityLevel.heavyWorkout ? 2.0 : 1.6;
+    }
+
+    // Minimum protein for non-active individuals
+    if (activityLevel == ActivityLevel.noWorkout) {
+      proteinPerKg = 1.2;
+    }
+
+    final proteinGrams = weight * proteinPerKg;
+    final proteinCalories = proteinGrams * 4;
+
+    // Calculate Fat
+    double fatPercentage = 0.25; // 25% baseline
+    if (phase == ActivityPhase.cut) fatPercentage = 0.20;
+    if (phase == ActivityPhase.bulk) fatPercentage = 0.30;
+
+    final fatCalories = calories * fatPercentage;
+    final fatGrams = fatCalories / 9;
+
+    // Fill the remaining calories with Carbohydrates
+    double remainingCalories = calories - proteinCalories - fatCalories;
+    // Fallback to prevent negative carbs on extreme, unhealthy low-calorie diets
+    if (remainingCalories < 0) remainingCalories = 0;
+
+    final carbGrams = remainingCalories / 4;
+
+    return {"protein_g": proteinGrams, "carbs_g": carbGrams, "fat_g": fatGrams};
   }
 
   /// Full calculation: BMI, category, calories, macros
@@ -129,6 +160,7 @@ class BmiRecommendedIntake {
     final targetCalories = adjustCaloriesForPhase(maintenance, phase);
     final macros = calculateMacros(
       calories: targetCalories,
+      weight: weight,
       activityLevel: activityLevel,
       phase: phase,
     );
