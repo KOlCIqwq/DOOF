@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import '../models/food_item.dart';
 import '../utils/quantity_parser.dart';
 
-enum DeletionMode { byUnit, byGram }
+enum DeletionMode { byPackage, byAmount }
 
 class DeleteQuantity extends StatefulWidget {
   final FoodItem item;
@@ -14,7 +14,7 @@ class DeleteQuantity extends StatefulWidget {
 }
 
 class _DeleteQuantityDialogState extends State<DeleteQuantity> {
-  DeletionMode _mode = DeletionMode.byUnit;
+  DeletionMode _mode = DeletionMode.byPackage;
   double _sliderValue = 1.0;
   late TextEditingController _textController;
   String _unit = 'units';
@@ -46,7 +46,7 @@ class _DeleteQuantityDialogState extends State<DeleteQuantity> {
 
   void _onSliderChanged(double value) {
     final String newText;
-    if (_mode == DeletionMode.byUnit) {
+    if (_mode == DeletionMode.byPackage) {
       value = (value * 10).round() / 10;
       newText = value.toStringAsFixed(1);
     } else {
@@ -61,7 +61,7 @@ class _DeleteQuantityDialogState extends State<DeleteQuantity> {
 
   void _onTextChanged(String value) {
     double numericValue = double.tryParse(value) ?? 1.0;
-    final double max = _mode == DeletionMode.byUnit ? maxUnits : maxGrams;
+    final double max = _mode == DeletionMode.byPackage ? maxUnits : maxGrams;
 
     if (numericValue > max) numericValue = max;
     if (numericValue < 0) numericValue = 0;
@@ -73,7 +73,7 @@ class _DeleteQuantityDialogState extends State<DeleteQuantity> {
 
   void _onDelete() {
     double gramsToDelete = 0;
-    if (_mode == DeletionMode.byUnit) {
+    if (_mode == DeletionMode.byPackage) {
       gramsToDelete = _sliderValue * widget.item.gramsPerUnit;
     } else {
       gramsToDelete = _sliderValue;
@@ -83,10 +83,10 @@ class _DeleteQuantityDialogState extends State<DeleteQuantity> {
 
   @override
   Widget build(BuildContext context) {
-    final double maxSliderValue = _mode == DeletionMode.byUnit
+    final double maxSliderValue = _mode == DeletionMode.byPackage
         ? maxUnits
         : maxGrams;
-    final String currentUnit = _mode == DeletionMode.byUnit ? _unit : 'Unit';
+    final String currentUnit = _mode == DeletionMode.byPackage ? _unit : 'Unit';
 
     return AlertDialog(
       title: Text('Delete ${widget.item.name}'),
@@ -97,11 +97,11 @@ class _DeleteQuantityDialogState extends State<DeleteQuantity> {
             SegmentedButton<DeletionMode>(
               segments: [
                 ButtonSegment(
-                  value: DeletionMode.byUnit,
+                  value: DeletionMode.byPackage,
                   label: Text('By $_unit'),
                 ),
                 const ButtonSegment(
-                  value: DeletionMode.byGram,
+                  value: DeletionMode.byAmount,
                   label: Text('By Grams'),
                 ),
               ],

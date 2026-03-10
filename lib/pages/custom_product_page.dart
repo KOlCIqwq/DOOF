@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/food_item.dart';
+import '../utils/quantity_parser.dart';
 
 class CustomProductPage extends StatefulWidget {
   final FoodItem? initialItem; // Pass an item if editing, null if creating new
@@ -31,6 +32,17 @@ class _CustomProductPageState extends State<CustomProductPage> {
     'calcium': 'Calcium (mg)',
     'iron': 'Iron (mg)',
   };
+
+  bool _isPerPackage = false;
+
+  double get _parsedPackageGrams {
+    final parsed = QuantityParser.parse(_packageSizeController.text);
+    final grams = QuantityParser.toGrams(parsed);
+    return grams > 0
+        ? grams
+        : 100.0; // Fallback to 100g to avoid divide-by-zero
+  }
+
   @override
   void initState() {
     super.initState();
@@ -80,10 +92,19 @@ class _CustomProductPageState extends State<CustomProductPage> {
 
   void _saveItem() {
     if (_formKey.currentState!.validate()) {
-      final protein = double.tryParse(_proteinController.text) ?? 0.0;
-      final carbs = double.tryParse(_carbsController.text) ?? 0.0;
-      final fat = double.tryParse(_fatController.text) ?? 0.0;
-      final calories = double.tryParse(_caloriesController.text) ?? 0.0;
+      final multiplierTo100g = _isPerPackage
+          ? (100.0 / _parsedPackageGrams)
+          : 1.0;
+
+      final protein =
+          (double.tryParse(_proteinController.text) ?? 0.0) * multiplierTo100g;
+      final carbs =
+          (double.tryParse(_carbsController.text) ?? 0.0) * multiplierTo100g;
+      final fat =
+          (double.tryParse(_fatController.text) ?? 0.0) * multiplierTo100g;
+      final calories =
+          (double.tryParse(_caloriesController.text) ?? 0.0) * multiplierTo100g;
+
       final Map<String, dynamic> customNutriments = Map<String, dynamic>.from(
         widget.initialItem?.nutriments ?? {},
       );
@@ -91,12 +112,12 @@ class _CustomProductPageState extends State<CustomProductPage> {
       customNutriments['proteins_100g'] = protein;
       customNutriments['carbohydrates_100g'] = carbs;
       customNutriments['fat_100g'] = fat;
+
       _extraNutrientControllers.forEach((nutrientKey, controller) {
         final val = double.tryParse(controller.text);
         if (val != null) {
-          customNutriments['${nutrientKey}_100g'] = val;
+          customNutriments['${nutrientKey}_100g'] = val * multiplierTo100g;
         } else {
-          // Optional: If the field is empty, remove it from the map
           customNutriments.remove('${nutrientKey}_100g');
         }
       });
@@ -118,13 +139,42 @@ class _CustomProductPageState extends State<CustomProductPage> {
         carbs: carbs,
         protein: protein,
         packageSize: _packageSizeController.text.trim(),
-        inventoryGrams: widget.initialItem?.inventoryGrams ?? 100.0,
+        inventoryGrams: _parsedPackageGrams,
         isKnown: true,
       );
 
       // Return the item to the previous screen
       Navigator.pop(context, newItem);
     }
+  }
+
+  void _toggleInputMode(bool toPerPackage) {
+    if (_isPerPackage == toPerPackage) return;
+
+    // Calculate the conversion multiplier
+    final multiplier = toPerPackage
+        ? (_parsedPackageGrams / 100.0)
+        : (100.0 / _parsedPackageGrams);
+
+    void convertController(TextEditingController ctrl) {
+      final val = double.tryParse(ctrl.text);
+      if (val != null) {
+        ctrl.text = (val * multiplier)
+            .toStringAsFixed(1)
+            .replaceAll(RegExp(r'\.0$'), '');
+      }
+    }
+
+    convertController(_caloriesController);
+    convertController(_proteinController);
+    convertController(_carbsController);
+    convertController(_fatController);
+    for (var ctrl in _extraNutrientControllers.values) {
+      convertController(ctrl);
+    }
+    setState(() {
+      _isPerPackage = toPerPackage;
+    });
   }
 
   List<Widget> _buildExtraNutrientFields() {
@@ -229,9 +279,43 @@ class _CustomProductPageState extends State<CustomProductPage> {
             ),
 
             const SizedBox(height: 32),
-            const Text(
-              'Macros (per 100g)',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Primary Macros',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                // Segmented toggle button
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(value: false, label: Text('Per 100g')),
+                    ButtonSegment(value: true, label: Text('Per Pkg')),
+                  ],
+                  selected: {_isPerPackage},
+                  onSelectionChanged: (Set<bool> newSelection) {
+                    _toggleInputMode(newSelection.first);
+                  },
+                  showSelectedIcon: false,
+                  style: SegmentedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+            Text(
+              _isPerPackage
+                  ? 'Values for $_parsedPackageGrams g'
+                  : 'Values for 100 g',
+              style: const TextStyle(
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
             ),
             const SizedBox(height: 8),
 
@@ -295,9 +379,11 @@ class _CustomProductPageState extends State<CustomProductPage> {
               ],
             ),
             const SizedBox(height: 32),
-            const Text(
-              'Other Nutrients (per 100g)',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              _isPerPackage
+                  ? 'Other Nutrients (per Package)'
+                  : 'Other Nutrients (per 100g)',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             ..._buildExtraNutrientFields(),
