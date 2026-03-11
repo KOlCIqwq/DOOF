@@ -17,17 +17,23 @@ class _DeleteQuantityDialogState extends State<DeleteQuantity> {
   DeletionMode _mode = DeletionMode.byPackage;
   double _sliderValue = 1.0;
   late TextEditingController _textController;
-  String _unit = 'units';
+  String _baseUnit = 'g'; // Will automatically map to 'g' or 'ml'
 
-  double get maxUnits => widget.item.displayQuantity;
-  double get maxGrams => widget.item.inventoryGrams;
+  double get maxPackages => widget.item.displayQuantity;
+  double get maxAmount => widget.item.inventoryGrams;
 
   @override
   void initState() {
     super.initState();
-    _textController = TextEditingController(text: '1');
+
     final (_, parsedUnit) = QuantityParser.parse(widget.item.packageSize);
-    _unit = parsedUnit.isNotEmpty ? parsedUnit : 'units';
+    final lower = parsedUnit.toLowerCase();
+    _baseUnit = (lower == 'l' || lower == 'ml') ? 'ml' : 'g';
+
+    _sliderValue = maxPackages >= 1.0 ? 1.0 : maxPackages;
+    _textController = TextEditingController(
+      text: _sliderValue.toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), ''),
+    );
   }
 
   @override
@@ -61,7 +67,9 @@ class _DeleteQuantityDialogState extends State<DeleteQuantity> {
 
   void _onTextChanged(String value) {
     double numericValue = double.tryParse(value) ?? 1.0;
-    final double max = _mode == DeletionMode.byPackage ? maxUnits : maxGrams;
+    final double max = _mode == DeletionMode.byPackage
+        ? maxPackages
+        : maxAmount;
 
     if (numericValue > max) numericValue = max;
     if (numericValue < 0) numericValue = 0;
@@ -84,9 +92,11 @@ class _DeleteQuantityDialogState extends State<DeleteQuantity> {
   @override
   Widget build(BuildContext context) {
     final double maxSliderValue = _mode == DeletionMode.byPackage
-        ? maxUnits
-        : maxGrams;
-    final String currentUnit = _mode == DeletionMode.byPackage ? _unit : 'Unit';
+        ? maxPackages
+        : maxAmount;
+    final String currentSuffix = _mode == DeletionMode.byPackage
+        ? 'pkg'
+        : _baseUnit;
 
     return AlertDialog(
       title: Text('Delete ${widget.item.name}'),
@@ -98,11 +108,11 @@ class _DeleteQuantityDialogState extends State<DeleteQuantity> {
               segments: [
                 ButtonSegment(
                   value: DeletionMode.byPackage,
-                  label: Text('By $_unit'),
+                  label: Text('By Package'),
                 ),
-                const ButtonSegment(
+                ButtonSegment(
                   value: DeletionMode.byAmount,
-                  label: Text('By Grams'),
+                  label: Text('By $_baseUnit'),
                 ),
               ],
               selected: {_mode},
@@ -110,7 +120,7 @@ class _DeleteQuantityDialogState extends State<DeleteQuantity> {
             ),
             const SizedBox(height: 24),
             Text(
-              'Select amount to delete (Max: ${maxSliderValue.toStringAsFixed(1)} $currentUnit)',
+              'Select amount to delete (Max: ${maxSliderValue.toStringAsFixed(1)} $currentSuffix)',
             ),
             Slider(
               value: _sliderValue.clamp(0, maxSliderValue),
@@ -135,7 +145,7 @@ class _DeleteQuantityDialogState extends State<DeleteQuantity> {
                 decoration: InputDecoration(
                   border: const OutlineInputBorder(),
                   contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                  suffixText: ' $currentUnit',
+                  suffixText: ' $currentSuffix',
                 ),
               ),
             ),

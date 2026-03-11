@@ -384,6 +384,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       source: null,
       categories: item.categories,
       expirationDate: item.expirationDate,
+      brand: item.brand,
+      packageSize: item.packageSize,
     );
 
     final itemIndex = inventoryItems.indexWhere(
@@ -434,6 +436,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       consumedNutrients: consumedNutrients,
       mealType: mealType,
       source: recipe.source,
+      brand: '',
+      packageSize: '100g',
     );
     setState(() {
       consumptionHistory.insert(0, log);

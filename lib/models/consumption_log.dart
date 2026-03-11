@@ -2,6 +2,10 @@ import '../models/recipe_model.dart';
 
 enum MealType { breakfast, lunch, dinner, snack }
 
+/* 
+Tracks the history meals
+*/
+
 class ConsumptionLog {
   final String barcode;
   final String productName;
@@ -13,6 +17,8 @@ class ConsumptionLog {
   final RecipeSource? source; //To know if it's a recipe and from where
   final String? categories;
   final DateTime? expirationDate;
+  final String brand;
+  final String packageSize;
 
   ConsumptionLog({
     required this.barcode,
@@ -22,6 +28,9 @@ class ConsumptionLog {
     required this.consumedDate,
     required this.consumedNutrients,
     required this.mealType,
+    required this.brand,
+    required this.packageSize,
+
     this.source,
     this.categories,
     this.expirationDate,
@@ -62,6 +71,8 @@ class ConsumptionLog {
       expirationDate: json['expirationDate'] != null
           ? DateTime.parse(json['expirationDate'])
           : null,
+      brand: json['brand'] ?? '',
+      packageSize: json['package_size'] ?? '100g',
     );
   }
 }

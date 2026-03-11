@@ -14,6 +14,10 @@ import 'history_page.dart';
 import 'product_detail_page.dart';
 import 'recipe_info.dart';
 
+/*
+The stats page, with implementation of fetch history
+*/
+
 class StatsPage extends StatelessWidget {
   final List<FoodItem> inventoryItems;
   final List<ConsumptionLog> consumptionHistory;
@@ -74,6 +78,16 @@ class StatsPage extends StatelessWidget {
     for (final log in logs) {
       if (aggregatedMap.containsKey(log.barcode)) {
         aggregatedMap[log.barcode]!['totalGrams'] += log.consumedGrams;
+
+        final existingNutrients =
+            aggregatedMap[log.barcode]!['nutrients'] as Map<String, double>;
+        log.consumedNutrients.forEach((key, value) {
+          existingNutrients.update(
+            key,
+            (existing) => existing + value,
+            ifAbsent: () => value,
+          );
+        });
       } else {
         aggregatedMap[log.barcode] = {
           'barcode': log.barcode,
@@ -83,6 +97,9 @@ class StatsPage extends StatelessWidget {
           'source': log.source,
           'categories': log.categories,
           'expirationDate': log.expirationDate,
+          'brand': log.brand,
+          'packageSize': log.packageSize,
+          'nutrients': Map<String, double>.from(log.consumedNutrients),
         };
       }
     }
@@ -120,26 +137,62 @@ class StatsPage extends StatelessWidget {
         );
       } else {
         FoodItem? item;
-        try{
+        try {
           // try to get the item from inventory if exist
           item = inventoryItems.firstWhere((i) => i.barcode == barcode);
-        } catch(_){
+        } catch (_) {
           item = null;
         }
-        if (item == null && !barcode.startsWith('custom_')){
+        if (item == null && !barcode.startsWith('custom_')) {
           // get the food from api service
           item = await OpenFoodFactsApiService.fetchFoodItem(barcode);
         }
-        if (item == null && barcode.startsWith('custom')){
+        if (item == null) {
           // try to get from past items
+          final consumedGrams = log['totalGrams'] as double;
+          final aggregatedNutrients = log['nutrients'] as Map<String, double>;
+
+          final Map<String, dynamic> reconstructedNutriments = {};
+          double fat = 0, carbs = 0, protein = 0;
+
+          if (consumedGrams > 0) {
+            aggregatedNutrients.forEach((key, val) {
+              // Convert the aggregated consumed amount back to a 100g baseline
+              final per100 = (val / consumedGrams) * 100;
+              reconstructedNutriments['${key}_100g'] = per100;
+
+              if (key == 'fat') fat = per100;
+              if (key == 'carbohydrates') carbs = per100;
+              if (key == 'proteins') protein = per100;
+            });
+          }
+
+          item = FoodItem(
+            barcode: barcode,
+            name: log['productName']?.toString() ?? 'Unknown Food',
+            brand: log['brand']?.toString() ?? 'Custom',
+            imageUrl: log['imageUrl']?.toString() ?? '',
+            insertDate: DateTime.now(),
+            categories: log['categories']?.toString() ?? '',
+            nutriments: reconstructedNutriments,
+            fat: fat,
+            carbs: carbs,
+            protein: protein,
+            packageSize: log['packageSize']?.toString() ?? '100 g',
+            inventoryGrams: 0,
+            isKnown: true,
+          );
         }
+
+        if (!context.mounted) return;
+
         Navigator.pop(context);
-        if (item != null && context.mounted) {
+        if (item != null) {
           await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) =>
-                  ProductDetailPage(product: item, showAddButton: false),
+                  ProductDetailPage(product: item!, showAddButton: false),
             ),
           );
         } else if (context.mounted) {
@@ -151,6 +204,7 @@ class StatsPage extends StatelessWidget {
         }
       }
     } catch (e) {
+      if (!context.mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(
         context,
@@ -329,14 +383,18 @@ class StatsPage extends StatelessWidget {
       initiallyExpanded: true,
       children: logs.map((log) {
         final List<String> subtitles = [];
-        if (log['categories'] != null &&
-            (log['categories'] as String).isNotEmpty) {
-          subtitles.add(log['categories']);
+        final categories = log['categories']?.toString() ?? '';
+        if (categories.isNotEmpty) {
+          subtitles.add(categories);
         }
         if (log['expirationDate'] != null) {
           final date = log['expirationDate'] as DateTime;
           subtitles.add('Expires: ${DateFormat.yMd().format(date)}');
         }
+
+        final productName = log['productName']?.toString() ?? 'Unknown Food';
+        final imageUrl = log['imageUrl']?.toString() ?? '';
+        final totalGrams = (log['totalGrams'] as num?)?.toDouble() ?? 0.0;
 
         return ListTile(
           onTap: () => navigateToDetail(context, log),
@@ -345,17 +403,19 @@ class StatsPage extends StatelessWidget {
             height: 40,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: CachedNetworkImage(
-                imageUrl: log['imageUrl'],
-                fit: BoxFit.cover,
-                errorWidget: (context, url, error) =>
-                    const Icon(Icons.fastfood, color: Colors.grey),
-              ),
+              child: imageUrl.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: imageUrl,
+                      fit: BoxFit.cover,
+                      errorWidget: (context, url, error) =>
+                          const Icon(Icons.fastfood, color: Colors.grey),
+                    )
+                  : const Icon(Icons.fastfood, color: Colors.grey),
             ),
           ),
-          title: Text(log['productName']),
+          title: Text(productName),
           subtitle: subtitles.isNotEmpty ? Text(subtitles.join(' | ')) : null,
-          trailing: Text('${(log['totalGrams'] as double).round()}g'),
+          trailing: Text('${totalGrams.round()}g'),
           dense: true,
         );
       }).toList(),
