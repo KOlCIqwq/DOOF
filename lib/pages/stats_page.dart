@@ -119,7 +119,20 @@ class StatsPage extends StatelessWidget {
           ),
         );
       } else {
-        final item = await OpenFoodFactsApiService.fetchFoodItem(barcode);
+        FoodItem? item;
+        try{
+          // try to get the item from inventory if exist
+          item = inventoryItems.firstWhere((i) => i.barcode == barcode);
+        } catch(_){
+          item = null;
+        }
+        if (item == null && !barcode.startsWith('custom_')){
+          // get the food from api service
+          item = await OpenFoodFactsApiService.fetchFoodItem(barcode);
+        }
+        if (item == null && barcode.startsWith('custom')){
+          // try to get from past items
+        }
         Navigator.pop(context);
         if (item != null && context.mounted) {
           await Navigator.push(
