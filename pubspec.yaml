@@ -46,6 +46,7 @@ dependencies:
   openfoodfacts: ^3.23.0
   collection: ^1.19.1
   supabase_flutter: ^2.10.0
+  flutter_markdown: ^0.7.7+1
 
 dev_dependencies:
   flutter_test:

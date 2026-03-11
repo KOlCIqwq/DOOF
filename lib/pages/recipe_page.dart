@@ -1,3 +1,4 @@
+import 'package:DOOF/widgets/global_appbar.dart';
 import 'package:flutter/material.dart';
 import '../models/consumption_log.dart';
 import '../models/recipe_model.dart';
@@ -32,7 +33,7 @@ class _RecipePageState extends State<RecipePage> {
     });
 
     try {
-      // 1. Try TheMealDB first
+      // Try TheMealDB first
       final mealDbResults = await TheMealDBApiService.searchRecipes(query);
 
       if (mealDbResults.isNotEmpty) {
@@ -44,7 +45,7 @@ class _RecipePageState extends State<RecipePage> {
         return;
       }
 
-      // 2. If TheMealDB has no results, try Spoonacular
+      // If TheMealDB has no results, try Spoonacular
       final spoonacularResults = await SpoonacularApiService.searchRecipes(
         query,
       );
@@ -57,7 +58,7 @@ class _RecipePageState extends State<RecipePage> {
           _canLoadFromSpoonacular = false;
         });
       } else {
-        // 3. If both APIs have no results
+        // If both APIs have no results
         setState(() {
           _searchState = SearchState.noResults;
         });
@@ -107,13 +108,14 @@ class _RecipePageState extends State<RecipePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: GlobalAppBar(title: 'Recipes'),
+      /* appBar: AppBar(
         title: const Text(
           'Find a Recipe',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-      ),
+      ), */
       body: Column(
         children: [
           Padding(

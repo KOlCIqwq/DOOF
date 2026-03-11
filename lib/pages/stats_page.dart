@@ -13,6 +13,7 @@ import '../widgets/nutrients_progress_bar.dart';
 import 'history_page.dart';
 import 'product_detail_page.dart';
 import 'recipe_info.dart';
+import '../widgets/global_appbar.dart';
 
 /*
 The stats page, with implementation of fetch history
@@ -245,13 +246,9 @@ class StatsPage extends StatelessWidget {
         .toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Daily Stats',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        actions: [
+      appBar: GlobalAppBar(
+        title: 'Daily Stats',
+        extraActions: [
           IconButton(
             icon: const Icon(Icons.history),
             onPressed: () {

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+import 'package:DOOF/widgets/global_appbar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -255,7 +256,16 @@ class InventoryPageState extends State<InventoryPage>
         }
       },
       child: Scaffold(
-        appBar: AppBar(
+        appBar: GlobalAppBar(
+          title: 'Inventory',
+          extraActions: [
+            IconButton(
+              onPressed: () => clearAllInventory(context),
+              icon: const Icon(Icons.delete_sweep_outlined),
+            ),
+          ],
+        ),
+        /* appBar: AppBar(
           title: const Text(
             'My Inventory',
             style: TextStyle(fontWeight: FontWeight.bold),
@@ -269,7 +279,7 @@ class InventoryPageState extends State<InventoryPage>
                 tooltip: 'Clear All',
               ),
           ],
-        ),
+        ), */
         body: Stack(
           children: [
             widget.inventory.isEmpty

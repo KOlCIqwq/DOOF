@@ -1,3 +1,4 @@
+import 'package:DOOF/widgets/global_appbar.dart';
 import 'package:flutter/material.dart';
 import '../services/bmi_recommended_intake.dart';
 import '../utils/recommended_intake_helper.dart';
@@ -425,7 +426,17 @@ class ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: GlobalAppBar(
+        title: 'Profile',
+        extraActions: [
+          IconButton(
+            onPressed: saveInfo,
+            icon: const Icon(Icons.check), // Confirm button
+          ),
+          IconButton(onPressed: logout, icon: const Icon(Icons.logout)),
+        ],
+      ),
+      /* appBar: AppBar(
         title: const Text(
           'Profile',
           style: TextStyle(fontWeight: FontWeight.bold),
@@ -443,7 +454,7 @@ class ProfilePageState extends State<ProfilePage> {
             tooltip: "Logout",
           ),
         ],
-      ),
+      ), */
       body: buildBody(),
     );
   }
