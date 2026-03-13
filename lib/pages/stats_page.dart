@@ -24,11 +24,14 @@ class StatsPage extends StatelessWidget {
   final List<ConsumptionLog> consumptionHistory;
   final List<DailyStatsSummary> dailySummaries;
 
+  final void Function(String barcode, MealType mealType) onDeleteLog;
+
   const StatsPage({
     super.key,
     required this.inventoryItems,
     required this.consumptionHistory,
     required this.dailySummaries,
+    required this.onDeleteLog,
   });
 
   // Get today's consumption logs from the history.
@@ -412,7 +415,51 @@ class StatsPage extends StatelessWidget {
           ),
           title: Text(productName),
           subtitle: subtitles.isNotEmpty ? Text(subtitles.join(' | ')) : null,
-          trailing: Text('${totalGrams.round()}g'),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('${totalGrams.round()}g'),
+              IconButton(
+                icon: const Icon(
+                  Icons.delete_outline,
+                  color: Colors.red,
+                  size: 20,
+                ),
+                tooltip: 'Delete log',
+                onPressed: () {
+                  // Show confirmation dialog before deleting
+                  showDialog(
+                    context: context,
+                    builder: (BuildContext dialogContext) {
+                      return AlertDialog(
+                        title: const Text('Delete Meal'),
+                        content: Text(
+                          'Are you sure you want to remove $productName from your consumption today?',
+                        ),
+                        actions: [
+                          TextButton(
+                            child: const Text('Cancel'),
+                            onPressed: () => Navigator.pop(dialogContext),
+                          ),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.red,
+                            ),
+                            child: const Text('Delete'),
+                            onPressed: () {
+                              Navigator.pop(dialogContext);
+                              // Trigger the callback with barcode and mealType
+                              onDeleteLog(log['barcode'], mealType);
+                            },
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
+              ),
+            ],
+          ),
           dense: true,
         );
       }).toList(),

@@ -27,38 +27,26 @@ class _AIChatOverlayState extends State<AIChatOverlay> {
   final String _systemPrompt = """
 You are a helpful nutrition and recipe assistant.
 
-CRITICAL INSTRUCTION: EVERY TIME the user mentions eating ANY food, or asks about the nutritional value of ANY food, you MUST help them add it to their app's inventory.
-To do this, you MUST output a valid JSON block enclosed STRICTLY in <addCustomFood> and </addCustomFood> tags for EACH food item mentioned.
+CRITICAL INSTRUCTION: EVERY TIME the user mentions eating a meal, or a combination of foods, you MUST help them add it to their app's inventory as a SINGLE combined item. 
+To do this, calculate the total combined nutritional values of all ingredients mentioned and output ONE valid JSON block enclosed STRICTLY in <addCustomFood> and </addCustomFood> tags.
 
-If the user mentions multiple foods (e.g., "200g of rice and 100g of chicken"), you MUST output multiple separate <addCustomFood> blocks, one for each item.
+The JSON must contain exactly these keys: "name" (combined meal name), "brand" (use "Homemade" or "AI Generated"), "packageSize" (total combined weight, e.g., "300 g"), "calories", "protein", "carbs", and "fat".
+IMPORTANT: The nutritional numbers ("calories", "protein", etc.) MUST be the TOTAL combined macros for the ENTIRE packageSize, NOT per 100g!
 
-The JSON must contain exactly these keys: "name", "brand" (use "Generic" if unknown), "packageSize" (e.g., "100 g"), "calories", "protein", "carbs", and "fat" (use numbers for macros).
-
-Example of a user asking about multiple foods:
+Example of a user asking about "200g of white rice and 100g of chicken breast":
 <addCustomFood>
 {
-  "name": "Cooked White Rice",
-  "brand": "Generic",
-  "packageSize": "200 g",
-  "calories": 260,
-  "protein": 5.4,
+  "name": "Chicken and White Rice Bowl",
+  "brand": "Homemade",
+  "packageSize": "300 g",
+  "calories": 425,
+  "protein": 36.4,
   "carbs": 56,
-  "fat": 0.6
-}
-</addCustomFood>
-<addCustomFood>
-{
-  "name": "Chicken Breast",
-  "brand": "Generic",
-  "packageSize": "100 g",
-  "calories": 165,
-  "protein": 31,
-  "carbs": 0,
-  "fat": 3.6
+  "fat": 4.2
 }
 </addCustomFood>
 
-Respond naturally to the user, but ALWAYS include your <addCustomFood> tag(s) at the very end of your response.
+Respond naturally to the user. You can break down the individual ingredients in your text response so they know the math, but ALWAYS include your SINGLE combined <addCustomFood> tag at the very end of your response.
 CRITICAL FORMATTING RULE: Do NOT use markdown tables in your responses. Always use bulleted lists instead.
 """;
 
@@ -358,12 +346,28 @@ CRITICAL FORMATTING RULE: Do NOT use markdown tables in your responses. Always u
   }
 
   Widget _buildCustomFoodCard(Map<String, dynamic> data) {
-    final cals = (data['calories'] as num?)?.toDouble() ?? 0.0;
-    final protein = (data['protein'] as num?)?.toDouble() ?? 0.0;
-    final carbs = (data['carbs'] as num?)?.toDouble() ?? 0.0;
-    final fat = (data['fat'] as num?)?.toDouble() ?? 0.0;
+    final totalCals = (data['calories'] as num?)?.toDouble() ?? 0.0;
+    final totalProtein = (data['protein'] as num?)?.toDouble() ?? 0.0;
+    final totalCarbs = (data['carbs'] as num?)?.toDouble() ?? 0.0;
+    final totalFat = (data['fat'] as num?)?.toDouble() ?? 0.0;
 
-    final aiFoodItem = FoodItem(
+    final String packageSizeStr = data['packageSize']?.toString() ?? '100 g';
+    double startingGrams = 100.0;
+    final match = RegExp(r'(\d+(\.\d+)?)').firstMatch(packageSizeStr);
+    if (match != null) {
+      startingGrams = double.tryParse(match.group(1)!) ?? 100.0;
+    }
+
+    if (startingGrams <= 0) startingGrams = 100.0;
+
+    // Calculate the 100g of macros
+    final multiplier = 100.0 / startingGrams;
+    final cals100g = totalCals * multiplier;
+    final protein100g = totalProtein * multiplier;
+    final carbs100g = totalCarbs * multiplier;
+    final fat100g = totalFat * multiplier;
+
+    final customFoodItem = FoodItem(
       barcode: 'custom_${DateTime.now().millisecondsSinceEpoch}',
       name: data['name']?.toString() ?? 'Custom',
       brand: data['brand']?.toString() ?? 'Custom',
@@ -371,16 +375,16 @@ CRITICAL FORMATTING RULE: Do NOT use markdown tables in your responses. Always u
       insertDate: DateTime.now(),
       categories: 'Custom',
       nutriments: {
-        'energy-kcal_100g': cals,
-        'proteins_100g': protein,
-        'carbohydrates_100g': carbs,
-        'fat_100g': fat,
+        'energy-kcal_100g': cals100g,
+        'proteins_100g': protein100g,
+        'carbohydrates_100g': carbs100g,
+        'fat_100g': fat100g,
       },
-      fat: fat,
-      carbs: carbs,
-      protein: protein,
+      fat: fat100g,
+      carbs: carbs100g,
+      protein: protein100g,
       packageSize: data['packageSize']?.toString() ?? '100 g',
-      inventoryGrams: 100.0,
+      inventoryGrams: startingGrams,
       isKnown: true,
     );
 
@@ -413,14 +417,14 @@ CRITICAL FORMATTING RULE: Do NOT use markdown tables in your responses. Always u
                 child: const Icon(Icons.fastfood, color: Colors.green),
               ),
               title: Text(
-                aiFoodItem.name,
+                customFoodItem.name,
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   color: Colors.black87,
                 ),
               ),
               subtitle: Text(
-                "${cals.round()} kcal • ${aiFoodItem.packageSize}",
+                "${totalCals.round()} kcal • ${customFoodItem.packageSize}",
                 style: TextStyle(color: Colors.grey.shade700),
               ),
             ),
@@ -440,7 +444,7 @@ CRITICAL FORMATTING RULE: Do NOT use markdown tables in your responses. Always u
                         context,
                         MaterialPageRoute(
                           builder: (context) =>
-                              CustomProductPage(initialItem: aiFoodItem),
+                              CustomProductPage(initialItem: customFoodItem),
                         ),
                       );
 
@@ -466,11 +470,11 @@ CRITICAL FORMATTING RULE: Do NOT use markdown tables in your responses. Always u
                   ElevatedButton.icon(
                     onPressed: () {
                       if (GlobalState.addFoodToInventory != null) {
-                        GlobalState.addFoodToInventory!(aiFoodItem);
+                        GlobalState.addFoodToInventory!(customFoodItem);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              '${aiFoodItem.name} added to inventory!',
+                              '${customFoodItem.name} added to inventory!',
                             ),
                             backgroundColor: Colors.green,
                           ),

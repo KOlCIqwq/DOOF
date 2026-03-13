@@ -65,6 +65,24 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     }
   }
 
+  void deleteConsumptionLog(String barcode, MealType mealType) {
+    setState(() {
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+
+      consumptionHistory.removeWhere(
+        (log) =>
+            log.barcode == barcode &&
+            log.mealType == mealType &&
+            log.consumedDate.isAfter(startOfDay),
+      );
+    });
+
+    // Save and sync the changes
+    saveAllData();
+    showErrorSnackbar('Meal log deleted');
+  }
+
   /// Load all data including inventory,consumption,summaries,personal info
   Future<void> _loadAllData() async {
     // Set loading state to true
@@ -554,6 +572,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                       .toList(),
                   consumptionHistory: consumptionHistory,
                   dailySummaries: dailySummaries,
+                  onDeleteLog: deleteConsumptionLog,
                 ),
                 // Account page
                 ProfilePage(
