@@ -47,6 +47,7 @@ dependencies:
   collection: ^1.19.1
   supabase_flutter: ^2.10.0
   flutter_markdown: ^0.7.7+1
+  animated_text_kit: ^4.3.0
 
 dev_dependencies:
   flutter_test:

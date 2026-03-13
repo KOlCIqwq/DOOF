@@ -257,6 +257,9 @@ class InventoryPageState extends State<InventoryPage>
       },
       child: Scaffold(
         appBar: GlobalAppBar(
+          onFoodAdded: (FoodItem newItem) {
+            widget.onAddNewItem(newItem);
+          },
           title: 'Inventory',
           extraActions: [
             IconButton(

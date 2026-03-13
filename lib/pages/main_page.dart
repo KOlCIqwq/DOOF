@@ -16,6 +16,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/profile_model.dart';
 import '../services/profille_storage.dart';
 import '../models/inventory_model.dart';
+import '../utils/global_state.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -40,6 +41,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    GlobalState.addFoodToInventory = addNewItemToInventory;
     WidgetsBinding.instance.addObserver(this);
     // Load all initial data
     _loadAllData();

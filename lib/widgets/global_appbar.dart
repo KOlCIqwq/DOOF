@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import '../pages/ai_chat.dart';
+import '../models/food_item.dart';
 
 class GlobalAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final List<Widget>? extraActions;
 
-  const GlobalAppBar({super.key, required this.title, this.extraActions});
+  final Function(FoodItem)? onFoodAdded;
+
+  const GlobalAppBar({
+    super.key,
+    required this.title,
+    this.onFoodAdded,
+    this.extraActions,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +26,7 @@ class GlobalAppBar extends StatelessWidget implements PreferredSizeWidget {
             PageRouteBuilder(
               opaque: false,
               pageBuilder: (BuildContext context, _, __) {
-                return const AIChatOverlay();
+                return AIChatOverlay();
               },
               transitionsBuilder:
                   (context, animation, secondaryAnimation, child) {
