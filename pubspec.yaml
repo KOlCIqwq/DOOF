@@ -48,6 +48,7 @@ dependencies:
   supabase_flutter: ^2.10.0
   flutter_markdown: ^0.7.7+1
   animated_text_kit: ^4.3.0
+  image_picker: ^1.2.1
 
 dev_dependencies:
   flutter_test:

@@ -7,6 +7,7 @@ import 'package:animated_text_kit/animated_text_kit.dart';
 import '../pages/custom_product_page.dart';
 import '../models/food_item.dart';
 import '../utils/global_state.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../secrets.dart';
 
@@ -50,6 +51,29 @@ Respond naturally to the user. You can break down the individual ingredients in 
 CRITICAL FORMATTING RULE: Do NOT use markdown tables in your responses. Always use bulleted lists instead.
 """;
 
+  final String _imagePrompt =
+      """ Analyze this image of food and estimate its nutritional value. 
+
+Based on what you observe, estimate the food you see: 
+1. If the items are close to each other or clearly part of the same dish/plate (e.g., a bowl of noodles with veggies, or a plated dinner), combine them into a SINGLE meal item. 
+2. If there are distinctly separate foods (e.g., an apple on the left and a wrapped sandwich on the right), treat them as SINGULAR, separate food items.
+
+For EACH distinct item or combined plate, output a valid JSON block enclosed STRICTLY in <addCustomFood> and </addCustomFood> tags.
+IMPORTANT: The nutritional numbers MUST be the TOTAL combined macros for the ENTIRE packageSize/plate you are estimating, NOT per 100g!
+
+Use this exact structure:
+<addCustomFood>
+{
+  "name": "Describe the meal or item briefly",
+  "brand": "Custom",
+  "packageSize": "350 g",
+  "calories": 320,
+  "protein": 25.0,
+  "carbs": 12.0,
+  "fat": 15.0
+}
+</addCustomFood>""";
+
   @override
   void initState() {
     super.initState();
@@ -73,6 +97,94 @@ CRITICAL FORMATTING RULE: Do NOT use markdown tables in your responses. Always u
         );
       }
     });
+  }
+
+  Future<void> _takePictureAndAnalyze() async {
+    final picker = ImagePicker();
+    // Open the native camera
+    final XFile? photo = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 80, // Compress slightly to save bandwidth
+    );
+
+    if (photo == null) return; // User canceled
+
+    // Add a placeholder message so the user sees something happening
+    setState(() {
+      _messages.add({
+        "role": "user",
+        "content": "Uploaded an image of my meal.",
+      });
+      _isLoading = true;
+    });
+    _scrollToBottom();
+    _saveChatHistory();
+
+    try {
+      final bytes = await photo.readAsBytes();
+      final base64Image = base64Encode(bytes);
+
+      // Call Groq's Vision Model
+      final response = await http.post(
+        Uri.parse('https://api.groq.com/openai/v1/chat/completions'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $groqApiKey',
+        },
+        body: jsonEncode({
+          "model":
+              "meta-llama/llama-4-scout-17b-16e-instruct", // Use the Vision model!
+          "messages": [
+            {
+              "role": "system",
+              "content": _imagePrompt, // Pass your existing strict JSON rules
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text":
+                      "Analyze this meal, estimate its total nutritional value, and output the <addCustomFood> JSON block.",
+                },
+                {
+                  "type": "image_url",
+                  "image_url": {"url": "data:image/jpeg;base64,$base64Image"},
+                },
+              ],
+            },
+          ],
+          "temperature": 0.5,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final aiText = data['choices'][0]['message']['content'];
+        setState(() {
+          _messages.add({"role": "assistant", "content": aiText});
+        });
+      } else {
+        setState(() {
+          _messages.add({
+            "role": "assistant",
+            "content":
+                "Error analyzing image: ${response.statusCode} - ${response.body}",
+          });
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _messages.add({
+          "role": "assistant",
+          "content": "Failed to upload image. Please try again.",
+        });
+      });
+    } finally {
+      setState(() => _isLoading = false);
+      _scrollToBottom();
+      _saveChatHistory();
+    }
   }
 
   Future<void> _loadChatHistory() async {
@@ -507,6 +619,15 @@ CRITICAL FORMATTING RULE: Do NOT use markdown tables in your responses. Always u
       ),
       child: Row(
         children: [
+          IconButton(
+            icon: const Icon(
+              Icons.camera_alt,
+              color: Colors.blueAccent,
+              size: 28,
+            ),
+            tooltip: 'Snap a photo of your meal',
+            onPressed: _isLoading ? null : _takePictureAndAnalyze,
+          ),
           Expanded(
             child: TextField(
               controller: _controller,
