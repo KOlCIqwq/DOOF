@@ -138,7 +138,7 @@ CRITICAL FORMATTING RULE: Do NOT use markdown tables in your responses. Always u
           'Authorization': 'Bearer $groqApiKey',
         },
         body: jsonEncode({
-          "model": "qwen/qwen3-32b",
+          "model": "openai/gpt-oss-120b",
           "messages": _messages,
           "temperature": 0.7,
         }),
