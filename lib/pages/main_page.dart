@@ -17,6 +17,7 @@ import '../models/profile_model.dart';
 import '../services/profille_storage.dart';
 import '../models/inventory_model.dart';
 import '../utils/global_state.dart';
+import '../utils/recommended_intake_helper.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -121,6 +122,15 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         dailySummaries = summaries;
         profileHistory = loadedProfile;
       });
+      // load profile at startups
+      RecommendedIntakeHelper.update(
+        weight: loadedProfile.weight ?? 70.0,
+        heightCm: loadedProfile.height ?? 170.0,
+        age: loadedProfile.age ?? 20.0,
+        gender: loadedProfile.gender,
+        activityLevel: loadedProfile.activity,
+        activityPhase: loadedProfile.phase,
+      );
 
       // Process and save previous day's statistics
       await processAndSavePreviousDayStats();
