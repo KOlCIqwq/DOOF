@@ -71,6 +71,66 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     }
   }
 
+  Widget _buildIngredientsBreakdown(FoodItem product) {
+    if (product.ingredients == null || product.ingredients!.isEmpty) {
+      return const SizedBox.shrink(); // Don't show anything if there are no ingredients
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'Ingredient Breakdown',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ),
+          ListView.builder(
+            shrinkWrap:
+                true, // Prevents scrolling conflicts with CustomScrollView
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
+            itemCount: product.ingredients!.length,
+            itemBuilder: (context, index) {
+              final ing = product.ingredients![index];
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                elevation: 1,
+                child: ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: Colors.orangeAccent,
+                    child: Icon(
+                      Icons.restaurant,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  title: Text(
+                    ing['name']?.toString() ?? 'Unknown Ingredient',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text('${ing['amount']} • ${ing['calories']} kcal'),
+                  trailing: Text(
+                    'P: ${ing['protein']}g\nC: ${ing['carbs']}g\nF: ${ing['fat']}g',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                      height: 1.3,
+                    ),
+                    textAlign: TextAlign.right,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final product = _controller.product;
@@ -124,6 +184,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     fat: (num.tryParse(currentNutrients['fat'] ?? '0') ?? 0.0)
                         .toDouble(),
                   ),
+                  _buildIngredientsBreakdown(product),
                   _buildKeyNutrientsList(nutrientLists.keyNutrients),
                   if (nutrientLists.otherNutrients.isNotEmpty)
                     _buildOtherNutrientsExpansionTile(

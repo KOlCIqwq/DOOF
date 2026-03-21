@@ -274,6 +274,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
 
   void setDirty() {
     if (!isDataDirty) setState(() => isDataDirty = true);
+    syncAllDataToSupabase();
   }
 
   // Add a new food item to inventory or update existing one
@@ -442,6 +443,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       showErrorSnackbar("Item not found in the inventory???");
     }
     saveAllData(); // Persist changes
+    syncAllDataToSupabase();
   }
 
   // Log a recipe consumption

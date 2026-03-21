@@ -15,6 +15,7 @@ class FoodItem {
   final String packageSize;
   final double inventoryGrams;
   final bool isKnown;
+  final List<dynamic>? ingredients;
 
   FoodItem({
     required this.barcode,
@@ -31,6 +32,7 @@ class FoodItem {
     required this.packageSize,
     required this.inventoryGrams,
     this.isKnown = true,
+    this.ingredients,
   });
 
   // The weight in grams of a single, standard package of this item.
@@ -62,6 +64,7 @@ class FoodItem {
     String? packageSize,
     double? inventoryGrams,
     bool? isKnown,
+    List<dynamic>? ingredients,
   }) {
     return FoodItem(
       barcode: barcode ?? this.barcode,
@@ -78,6 +81,7 @@ class FoodItem {
       packageSize: packageSize ?? this.packageSize,
       inventoryGrams: inventoryGrams ?? this.inventoryGrams,
       isKnown: isKnown ?? this.isKnown,
+      ingredients: ingredients ?? this.ingredients,
     );
   }
 
@@ -97,6 +101,7 @@ class FoodItem {
       'packageSize': packageSize,
       'inventoryGrams': inventoryGrams,
       'isKnown': isKnown,
+      'ingredients': ingredients,
     };
   }
 
@@ -128,6 +133,7 @@ class FoodItem {
       inventoryGrams: (json['inventory_grams'] as num? ?? 0.0).toDouble(),
 
       isKnown: json['is_known'] ?? false,
+      ingredients: json['ingredients'],
     );
   }
 }

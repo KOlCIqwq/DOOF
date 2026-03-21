@@ -8,6 +8,7 @@ import '../pages/custom_product_page.dart';
 import '../models/food_item.dart';
 import '../utils/global_state.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 import '../secrets.dart';
 
@@ -24,15 +25,16 @@ class _AIChatOverlayState extends State<AIChatOverlay> {
 
   List<Map<String, String>> _messages = [];
   bool _isLoading = false;
+  XFile? _selectedImage;
 
   final String _systemPrompt = """
 You are a helpful nutrition and recipe assistant.
 
-CRITICAL INSTRUCTION: EVERY TIME the user mentions eating a meal, or a combination of foods, you MUST help them add it to their app's inventory as a SINGLE combined item. 
-To do this, calculate the total combined nutritional values of all ingredients mentioned and output ONE valid JSON block enclosed STRICTLY in <addCustomFood> and </addCustomFood> tags.
+CRITICAL INSTRUCTION: EVERY TIME the user mentions eating a meal, or a combination of foods, you MUST help them add it to their app's inventory as a SINGLE combined item, but include a detailed breakdown of its ingredients.
+To do this, calculate the nutritional values and output ONE valid JSON block enclosed STRICTLY in <addCustomFood> and </addCustomFood> tags.
 
-The JSON must contain exactly these keys: "name" (combined meal name), "brand" (use "Homemade" or "AI Generated"), "packageSize" (total combined weight, e.g., "300 g"), "calories", "protein", "carbs", and "fat".
-IMPORTANT: The nutritional numbers ("calories", "protein", etc.) MUST be the TOTAL combined macros for the ENTIRE packageSize, NOT per 100g!
+The JSON must contain exactly these keys: "name" (combined meal name), "brand" (use "Homemade" or "AI Generated"), "packageSize" (total combined weight, e.g., "300 g"), "calories", "protein", "carbs", "fat", and an "ingredients" array.
+IMPORTANT: The top-level nutritional numbers ("calories", "protein", etc.) MUST be the TOTAL combined macros for the ENTIRE packageSize. Each object in the "ingredients" array must contain its own "name", "amount", "calories", "protein", "carbs", and "fat".
 
 Example of a user asking about "200g of white rice and 100g of chicken breast":
 <addCustomFood>
@@ -43,7 +45,25 @@ Example of a user asking about "200g of white rice and 100g of chicken breast":
   "calories": 425,
   "protein": 36.4,
   "carbs": 56,
-  "fat": 4.2
+  "fat": 4.2,
+  "ingredients": [
+    {
+      "name": "Cooked White Rice",
+      "amount": "200 g",
+      "calories": 260,
+      "protein": 5.4,
+      "carbs": 56,
+      "fat": 0.6
+    },
+    {
+      "name": "Chicken Breast",
+      "amount": "100 g",
+      "calories": 165,
+      "protein": 31,
+      "carbs": 0,
+      "fat": 3.6
+    }
+  ]
 }
 </addCustomFood>
 
@@ -51,15 +71,15 @@ Respond naturally to the user. You can break down the individual ingredients in 
 CRITICAL FORMATTING RULE: Do NOT use markdown tables in your responses. Always use bulleted lists instead.
 """;
 
-  final String _imagePrompt =
-      """ Analyze this image of food and estimate its nutritional value. 
+  final String _imagePrompt = """
+Analyze this image of food and estimate its nutritional value. 
 
 Based on what you observe, estimate the food you see: 
-1. If the items are close to each other or clearly part of the same dish/plate (e.g., a bowl of noodles with veggies, or a plated dinner), combine them into a SINGLE meal item. 
-2. If there are distinctly separate foods (e.g., an apple on the left and a wrapped sandwich on the right), treat them as SINGULAR, separate food items.
+1. If the items are close to each other or clearly part of the same dish/plate (e.g., a bowl of noodles with veggies, or a plated dinner), combine them into a SINGLE meal item, but provide a breakdown of the visible components in the "ingredients" array.
+2. If there are distinctly separate foods (e.g., an apple on the left and a wrapped sandwich on the right), treat them as SINGULAR, separate food items (output multiple <addCustomFood> tags).
 
 For EACH distinct item or combined plate, output a valid JSON block enclosed STRICTLY in <addCustomFood> and </addCustomFood> tags.
-IMPORTANT: The nutritional numbers MUST be the TOTAL combined macros for the ENTIRE packageSize/plate you are estimating, NOT per 100g!
+IMPORTANT: The top-level nutritional numbers MUST be the TOTAL combined macros for the ENTIRE packageSize/plate you are estimating. The "ingredients" array must list the specific components you identified.
 
 Use this exact structure:
 <addCustomFood>
@@ -70,9 +90,28 @@ Use this exact structure:
   "calories": 320,
   "protein": 25.0,
   "carbs": 12.0,
-  "fat": 15.0
+  "fat": 15.0,
+  "ingredients": [
+    {
+      "name": "Component 1 (e.g., Pasta)",
+      "amount": "200 g",
+      "calories": 200,
+      "protein": 7.0,
+      "carbs": 40.0,
+      "fat": 1.0
+    },
+    {
+      "name": "Component 2 (e.g., Tomato Sauce)",
+      "amount": "150 g",
+      "calories": 120,
+      "protein": 18.0,
+      "carbs": -28.0,
+      "fat": 14.0
+    }
+  ]
 }
-</addCustomFood>""";
+</addCustomFood>
+""";
 
   @override
   void initState() {
@@ -87,6 +126,21 @@ Use this exact structure:
     super.dispose();
   }
 
+  Future<void> _pickImage(ImageSource source) async {
+    final picker = ImagePicker();
+    final XFile? photo = await picker.pickImage(
+      source: source,
+      imageQuality: 50, // Compress heavily so SharedPreferences doesn't crash!
+      maxWidth: 800,
+    );
+
+    if (photo != null) {
+      setState(() {
+        _selectedImage = photo;
+      });
+    }
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -97,94 +151,6 @@ Use this exact structure:
         );
       }
     });
-  }
-
-  Future<void> _takePictureAndAnalyze() async {
-    final picker = ImagePicker();
-    // Open the native camera
-    final XFile? photo = await picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 80, // Compress slightly to save bandwidth
-    );
-
-    if (photo == null) return; // User canceled
-
-    // Add a placeholder message so the user sees something happening
-    setState(() {
-      _messages.add({
-        "role": "user",
-        "content": "Uploaded an image of my meal.",
-      });
-      _isLoading = true;
-    });
-    _scrollToBottom();
-    _saveChatHistory();
-
-    try {
-      final bytes = await photo.readAsBytes();
-      final base64Image = base64Encode(bytes);
-
-      // Call Groq's Vision Model
-      final response = await http.post(
-        Uri.parse('https://api.groq.com/openai/v1/chat/completions'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $groqApiKey',
-        },
-        body: jsonEncode({
-          "model":
-              "meta-llama/llama-4-scout-17b-16e-instruct", // Use the Vision model!
-          "messages": [
-            {
-              "role": "system",
-              "content": _imagePrompt, // Pass your existing strict JSON rules
-            },
-            {
-              "role": "user",
-              "content": [
-                {
-                  "type": "text",
-                  "text":
-                      "Analyze this meal, estimate its total nutritional value, and output the <addCustomFood> JSON block.",
-                },
-                {
-                  "type": "image_url",
-                  "image_url": {"url": "data:image/jpeg;base64,$base64Image"},
-                },
-              ],
-            },
-          ],
-          "temperature": 0.5,
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final aiText = data['choices'][0]['message']['content'];
-        setState(() {
-          _messages.add({"role": "assistant", "content": aiText});
-        });
-      } else {
-        setState(() {
-          _messages.add({
-            "role": "assistant",
-            "content":
-                "Error analyzing image: ${response.statusCode} - ${response.body}",
-          });
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _messages.add({
-          "role": "assistant",
-          "content": "Failed to upload image. Please try again.",
-        });
-      });
-    } finally {
-      setState(() => _isLoading = false);
-      _scrollToBottom();
-      _saveChatHistory();
-    }
   }
 
   Future<void> _loadChatHistory() async {
@@ -231,18 +197,70 @@ Use this exact structure:
 
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    final hasImage = _selectedImage != null;
 
+    if (text.isEmpty && !hasImage) return;
+
+    String? base64Image;
+    if (hasImage) {
+      final bytes = await _selectedImage!.readAsBytes();
+      base64Image = base64Encode(bytes);
+    }
+
+    // Add to local chat UI
     setState(() {
-      _messages.add({"role": "user", "content": text});
+      _messages.add({
+        "role": "user",
+        "content": text.isEmpty && hasImage ? "📷 Uploaded an image." : text,
+        if (hasImage)
+          "imageBase64": base64Image!, // Save the image to show in the bubble
+      });
       _isLoading = true;
       _controller.clear();
+      _selectedImage = null; // Clear the preview!
     });
+
     _scrollToBottom();
     _saveChatHistory();
 
     try {
-      // OpenAI compatible
+      // Prepare the API payload
+      List<Map<String, dynamic>> apiMessages = [];
+
+      // Add the history (Text only to save bandwidth)
+      for (var i = 0; i < _messages.length - 1; i++) {
+        apiMessages.add({
+          "role": _messages[i]["role"],
+          "content": _messages[i]["content"],
+        });
+      }
+
+      // add current message
+      if (hasImage) {
+        // If they typed a custom prompt, attach it to the strict image instructions!
+        final customPrompt = text.isNotEmpty
+            ? "\n\nUser's custom request: $text"
+            : "";
+
+        apiMessages.add({
+          "role": "user",
+          "content": [
+            {"type": "text", "text": _imagePrompt + customPrompt},
+            {
+              "type": "image_url",
+              "image_url": {"url": "data:image/jpeg;base64,$base64Image"},
+            },
+          ],
+        });
+      } else {
+        apiMessages.add({"role": "user", "content": text});
+      }
+
+      // Call Groq API
+      final modelToUse = hasImage
+          ? "meta-llama/llama-4-scout-17b-16e-instruct"
+          : "openai/gpt-oss-120b";
+
       final response = await http.post(
         Uri.parse('https://api.groq.com/openai/v1/chat/completions'),
         headers: {
@@ -250,9 +268,9 @@ Use this exact structure:
           'Authorization': 'Bearer $groqApiKey',
         },
         body: jsonEncode({
-          "model": "openai/gpt-oss-120b",
-          "messages": _messages,
-          "temperature": 0.7,
+          "model": modelToUse,
+          "messages": apiMessages,
+          "temperature": 0.5,
         }),
       );
 
@@ -266,7 +284,7 @@ Use this exact structure:
         setState(() {
           _messages.add({
             "role": "assistant",
-            "content": "Error: ${response.statusCode} - ${response.body}",
+            "content": "Error: ${response.statusCode}",
           });
         });
       }
@@ -278,11 +296,9 @@ Use this exact structure:
         });
       });
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
-
-      _saveChatHistory(); //Save again after ai responds
+      setState(() => _isLoading = false);
+      _scrollToBottom();
+      _saveChatHistory();
     }
   }
 
@@ -393,9 +409,29 @@ Use this exact structure:
           ),
         ),
         child: isUser
-            ? Text(
-                mainText,
-                style: const TextStyle(color: Colors.white, fontSize: 16),
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // Saved image
+                  if (msg.containsKey("imageBase64") &&
+                      msg["imageBase64"]!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.memory(
+                          base64Decode(msg["imageBase64"]!),
+                          height: 150,
+                          width: 200,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  Text(
+                    mainText,
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                ],
               )
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -471,6 +507,7 @@ Use this exact structure:
     }
 
     if (startingGrams <= 0) startingGrams = 100.0;
+    final List<dynamic> extractedIngredients = data['ingredients'] ?? [];
 
     // Calculate the 100g of macros
     final multiplier = 100.0 / startingGrams;
@@ -498,6 +535,7 @@ Use this exact structure:
       packageSize: data['packageSize']?.toString() ?? '100 g',
       inventoryGrams: startingGrams,
       isKnown: true,
+      ingredients: extractedIngredients,
     );
 
     return Padding(
@@ -617,44 +655,98 @@ Use this exact structure:
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          IconButton(
-            icon: const Icon(
-              Icons.camera_alt,
-              color: Colors.blueAccent,
-              size: 28,
-            ),
-            tooltip: 'Snap a photo of your meal',
-            onPressed: _isLoading ? null : _takePictureAndAnalyze,
-          ),
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => _sendMessage(),
-              decoration: InputDecoration(
-                hintText: 'Ask about nutrition, recipes...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide.none,
+          // --- IMAGE PREVIEW BOX ---
+          if (_selectedImage != null)
+            Stack(
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12, left: 8),
+                  height: 80,
+                  width: 80,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
+                    image: DecorationImage(
+                      image: FileImage(File(_selectedImage!.path)),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
                 ),
-                filled: true,
-                fillColor: Colors.grey.shade200,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
+                Positioned(
+                  top: -5,
+                  right: -5,
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.cancel,
+                      color: Colors.black54,
+                      size: 24,
+                    ),
+                    onPressed: () => setState(() => _selectedImage = null),
+                  ),
+                ),
+              ],
+            ),
+
+          // --- CHAT BAR ---
+          Row(
+            children: [
+              // Gallery Button
+              IconButton(
+                icon: const Icon(
+                  Icons.image,
+                  color: Colors.blueAccent,
+                  size: 26,
+                ),
+                tooltip: 'Upload from Gallery',
+                onPressed: _isLoading
+                    ? null
+                    : () => _pickImage(ImageSource.gallery),
+              ),
+              // Camera Button
+              IconButton(
+                icon: const Icon(
+                  Icons.camera_alt,
+                  color: Colors.blueAccent,
+                  size: 26,
+                ),
+                tooltip: 'Snap a photo',
+                onPressed: _isLoading
+                    ? null
+                    : () => _pickImage(ImageSource.camera),
+              ),
+              Expanded(
+                child: TextField(
+                  controller: _controller,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _sendMessage(),
+                  decoration: InputDecoration(
+                    hintText: 'Message or add image...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey.shade200,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          CircleAvatar(
-            backgroundColor: Colors.blueAccent,
-            child: IconButton(
-              icon: const Icon(Icons.send, color: Colors.white),
-              onPressed: _sendMessage,
-            ),
+              const SizedBox(width: 8),
+              CircleAvatar(
+                backgroundColor: Colors.blueAccent,
+                child: IconButton(
+                  icon: const Icon(Icons.send, color: Colors.white),
+                  onPressed: _isLoading ? null : _sendMessage,
+                ),
+              ),
+            ],
           ),
         ],
       ),
