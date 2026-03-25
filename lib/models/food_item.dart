@@ -90,17 +90,17 @@ class FoodItem {
       'barcode': barcode,
       'name': name,
       'brand': brand,
-      'imageUrl': imageUrl,
-      'insertDate': insertDate.toIso8601String(),
-      'expirationDate': expirationDate?.toIso8601String(),
+      'image_url': imageUrl,
+      'insert_date': insertDate.toIso8601String(),
+      'expiration_date': expirationDate?.toIso8601String(),
       'categories': categories,
       'nutriments': nutriments,
       'fat': fat,
       'carbs': carbs,
       'protein': protein,
-      'packageSize': packageSize,
-      'inventoryGrams': inventoryGrams,
-      'isKnown': isKnown,
+      'package_size': packageSize,
+      'inventory_grams': inventoryGrams,
+      'is_known': isKnown,
       'ingredients': ingredients,
     };
   }
@@ -133,7 +133,9 @@ class FoodItem {
       inventoryGrams: (json['inventory_grams'] as num? ?? 0.0).toDouble(),
 
       isKnown: json['is_known'] ?? false,
-      ingredients: json['ingredients'],
+      ingredients: json['ingredients'] != null
+          ? List<dynamic>.from(json['ingredients'])
+          : null,
     );
   }
 }

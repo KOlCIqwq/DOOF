@@ -9,6 +9,7 @@ import '../models/food_item.dart';
 import '../utils/global_state.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:math' as math;
 
 import '../secrets.dart';
 
@@ -226,13 +227,20 @@ Use this exact structure:
     try {
       // Prepare the API payload
       List<Map<String, dynamic>> apiMessages = [];
+      // Inject first the system prompt
+      apiMessages.add({"role": "system", "content": _systemPrompt});
+
+      final startIndex = math.max(0, _messages.length - 5);
 
       // Add the history (Text only to save bandwidth)
-      for (var i = 0; i < _messages.length - 1; i++) {
-        apiMessages.add({
-          "role": _messages[i]["role"],
-          "content": _messages[i]["content"],
-        });
+      for (var i = startIndex; i < _messages.length - 1; i++) {
+        if (_messages[i]["role"] != "system") {
+          // If previous got images, send only the prompt
+          apiMessages.add({
+            "role": _messages[i]["role"],
+            "content": _messages[i]["content"],
+          });
+        }
       }
 
       // add current message

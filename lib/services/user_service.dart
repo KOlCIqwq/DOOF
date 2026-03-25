@@ -76,6 +76,7 @@ class UserService {
     String? packageSize,
     double? inventoryGrams,
     bool? isKnown,
+    List<dynamic>? ingredients,
   }) async {
     await supabase.from('foodItems').insert({
       'barcode': barcode,
@@ -92,6 +93,7 @@ class UserService {
       'package_size': packageSize,
       'inventory_grams': inventoryGrams,
       'is_known': isKnown,
+      'ingredients': ingredients,
     });
   }
 
@@ -110,6 +112,7 @@ class UserService {
       'package_size': item.packageSize,
       'is_known': true, // We now know about this item
       'insert_date': DateTime.now().toIso8601String(),
+      'ingredients': item.ingredients,
     });
   }
 
