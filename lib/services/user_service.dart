@@ -45,6 +45,10 @@ class UserService {
     int? gender,
     int? activity,
     int? phase,
+    int? calcMode,
+    int? carbPercent,
+    int? proteinPercent,
+    int? fatPercent,
   }) async {
     await supabase
         .from('profiles')
@@ -55,6 +59,10 @@ class UserService {
           if (gender != null) 'gender': gender,
           if (activity != null) 'activity': activity,
           if (phase != null) 'phase': phase,
+          if (calcMode != null) 'calc_mode': calcMode,
+          if (carbPercent != null) 'carb_percent': carbPercent,
+          if (proteinPercent != null) 'protein_percent': proteinPercent,
+          if (fatPercent != null) 'fat_percent': fatPercent,
           'updated_at': DateTime.now().toIso8601String(),
         })
         .eq('id', userId);

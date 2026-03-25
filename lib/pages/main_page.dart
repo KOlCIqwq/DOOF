@@ -178,6 +178,10 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
           gender: profileHistory!.gender.index,
           activity: profileHistory!.activity.index,
           phase: profileHistory!.phase.index,
+          calcMode: profileHistory!.calcMode.index,
+          carbPercent: profileHistory!.carbPercent,
+          proteinPercent: profileHistory!.proteinPercent,
+          fatPercent: profileHistory!.fatPercent,
         );
 
         final allFoodItems = {

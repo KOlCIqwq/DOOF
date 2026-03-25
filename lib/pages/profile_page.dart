@@ -29,6 +29,12 @@ class ProfilePageState extends State<ProfilePage> {
   ActivityLevel currentActivity = ActivityLevel.noWorkout;
   ActivityPhase currentPhase = ActivityPhase.keep;
 
+  // New Macro & Mode state variables
+  CalcMode currentCalcMode = CalcMode.percentage;
+  int currentCarbPct = 40;
+  int currentProteinPct = 30;
+  int currentFatPct = 30;
+
   double? currentBmi;
   String? currentCategory;
   double? maintenanceCalories;
@@ -40,9 +46,14 @@ class ProfilePageState extends State<ProfilePage> {
   }
 
   void saveInfo() async {
-    // When saving the info, let it be handled in update
     handleUpdate();
     widget.onSyncRequested();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Profile saved and synced!'),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
 
   @override
@@ -68,6 +79,12 @@ class ProfilePageState extends State<ProfilePage> {
         currentGender = widget.profile!.gender;
         currentActivity = widget.profile!.activity;
         currentPhase = widget.profile!.phase;
+
+        // Load the new variables!
+        currentCalcMode = widget.profile!.calcMode;
+        currentCarbPct = widget.profile!.carbPercent;
+        currentProteinPct = widget.profile!.proteinPercent;
+        currentFatPct = widget.profile!.fatPercent;
       });
     }
     calculateDisplayStats();
@@ -75,6 +92,12 @@ class ProfilePageState extends State<ProfilePage> {
 
   void handleUpdate() {
     if (currentWeight != null && currentHeight != null && currentAge != null) {
+      // Ensure sliders equal 100 before saving the new percentage split
+      if (currentCalcMode == CalcMode.percentage &&
+          (currentCarbPct + currentProteinPct + currentFatPct) != 100) {
+        // Optionally, show an error here or just let it pass and auto-balance later
+      }
+
       final updatedProfile = ProfileModel(
         weight: currentWeight!,
         height: currentHeight!,
@@ -82,6 +105,10 @@ class ProfilePageState extends State<ProfilePage> {
         gender: currentGender,
         activity: currentActivity,
         phase: currentPhase,
+        calcMode: currentCalcMode,
+        carbPercent: currentCarbPct,
+        proteinPercent: currentProteinPct,
+        fatPercent: currentFatPct,
       );
       widget.onProfileChanged(updatedProfile); // Signal the changes to mainPage
       calculateDisplayStats();
@@ -109,6 +136,7 @@ class ProfilePageState extends State<ProfilePage> {
         maintenanceCalories = calories;
       });
 
+      // Pass everything to the global tracker
       RecommendedIntakeHelper.update(
         weight: currentWeight!,
         heightCm: currentHeight!,
@@ -116,6 +144,10 @@ class ProfilePageState extends State<ProfilePage> {
         gender: currentGender,
         activityLevel: currentActivity,
         activityPhase: currentPhase,
+        mode: currentCalcMode,
+        carbPercent: currentCarbPct,
+        proteinPercent: currentProteinPct,
+        fatPercent: currentFatPct,
       );
     }
   }
@@ -173,9 +205,7 @@ class ProfilePageState extends State<ProfilePage> {
       labelText: "Weight (kg)",
       initialValue: currentWeight,
       onSaved: (newValue) {
-        setState(() {
-          currentWeight = newValue;
-        });
+        setState(() => currentWeight = newValue);
         handleUpdate();
       },
     );
@@ -187,9 +217,7 @@ class ProfilePageState extends State<ProfilePage> {
       labelText: "Height (cm)",
       initialValue: currentHeight,
       onSaved: (newValue) {
-        setState(() {
-          currentHeight = newValue;
-        });
+        setState(() => currentHeight = newValue);
         handleUpdate();
       },
     );
@@ -201,11 +229,103 @@ class ProfilePageState extends State<ProfilePage> {
       labelText: "Age (years)",
       initialValue: currentAge,
       onSaved: (newValue) {
-        setState(() {
-          currentAge = newValue;
-        });
+        setState(() => currentAge = newValue);
         handleUpdate();
       },
+    );
+  }
+
+  Widget _buildSingleMacroSlider(
+    String label,
+    int value,
+    Color color,
+    ValueChanged<double> onChanged,
+  ) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 60,
+          child: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+        ),
+        Expanded(
+          child: Slider(
+            value: value.toDouble(),
+            min: 0,
+            max: 100,
+            divisions: 100,
+            activeColor: color,
+            onChanged: onChanged,
+          ),
+        ),
+        SizedBox(width: 40, child: Text("$value%", textAlign: TextAlign.right)),
+      ],
+    );
+  }
+
+  Widget _buildMacroSliders() {
+    int total = currentCarbPct + currentProteinPct + currentFatPct;
+    bool isValid = total == 100;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isValid ? Colors.grey.shade200 : Colors.red.shade300,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "Macro Split",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                "$total%",
+                style: TextStyle(
+                  color: isValid ? Colors.green : Colors.red,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          if (!isValid)
+            const Padding(
+              padding: EdgeInsets.only(top: 4.0),
+              child: Text(
+                "Total must equal exactly 100%",
+                style: TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            ),
+          const SizedBox(height: 12),
+
+          _buildSingleMacroSlider("Carbs", currentCarbPct, Colors.orange, (
+            val,
+          ) {
+            setState(() => currentCarbPct = val.toInt());
+            handleUpdate();
+          }),
+          _buildSingleMacroSlider("Protein", currentProteinPct, Colors.blue, (
+            val,
+          ) {
+            setState(() => currentProteinPct = val.toInt());
+            handleUpdate();
+          }),
+          _buildSingleMacroSlider("Fat", currentFatPct, Colors.red, (val) {
+            setState(() => currentFatPct = val.toInt());
+            handleUpdate();
+          }),
+        ],
+      ),
     );
   }
 
@@ -216,8 +336,11 @@ class ProfilePageState extends State<ProfilePage> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            Text("Current User: $currentEmail"),
-            const SizedBox(height: 16),
+            Text(
+              "Current User: $currentEmail",
+              style: const TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 24),
             InkWell(
               onTap: adjustWeight,
               child: Row(
@@ -268,43 +391,6 @@ class ProfilePageState extends State<ProfilePage> {
               ),
             ),
             const SizedBox(height: 24),
-            Row(
-              children: [
-                const Text("Gender", style: TextStyle(fontSize: 16)),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: ToggleButtons(
-                    borderRadius: BorderRadius.circular(12),
-                    isSelected: [
-                      currentGender == Gender.male,
-                      currentGender == Gender.female,
-                      currentGender == Gender.other,
-                    ],
-                    onPressed: (index) {
-                      setState(() {
-                        currentGender = Gender.values[index];
-                      });
-                      handleUpdate();
-                    },
-                    children: const [
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        child: Text("Male"),
-                      ),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        child: Text("Female"),
-                      ),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        child: Text("Other"),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
             InkWell(
               onTap: adjustAge,
               child: Row(
@@ -332,6 +418,41 @@ class ProfilePageState extends State<ProfilePage> {
             const SizedBox(height: 24),
             Row(
               children: [
+                const Text("Gender", style: TextStyle(fontSize: 16)),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ToggleButtons(
+                    borderRadius: BorderRadius.circular(12),
+                    isSelected: [
+                      currentGender == Gender.male,
+                      currentGender == Gender.female,
+                      currentGender == Gender.other,
+                    ],
+                    onPressed: (index) {
+                      setState(() => currentGender = Gender.values[index]);
+                      handleUpdate();
+                    },
+                    children: const [
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text("Male"),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text("Female"),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text("Other"),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
                 const Text("Activity", style: TextStyle(fontSize: 16)),
                 const SizedBox(width: 16),
                 Expanded(
@@ -343,9 +464,9 @@ class ProfilePageState extends State<ProfilePage> {
                       currentActivity == ActivityLevel.heavyWorkout,
                     ],
                     onPressed: (index) {
-                      setState(() {
-                        currentActivity = ActivityLevel.values[index];
-                      });
+                      setState(
+                        () => currentActivity = ActivityLevel.values[index],
+                      );
                       handleUpdate();
                     },
                     children: const [
@@ -380,9 +501,9 @@ class ProfilePageState extends State<ProfilePage> {
                       currentPhase == ActivityPhase.cut,
                     ],
                     onPressed: (index) {
-                      setState(() {
-                        currentPhase = ActivityPhase.values[index];
-                      });
+                      setState(
+                        () => currentPhase = ActivityPhase.values[index],
+                      );
                       handleUpdate();
                     },
                     children: const [
@@ -403,7 +524,52 @@ class ProfilePageState extends State<ProfilePage> {
                 ),
               ],
             ),
+
             const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 16),
+
+            // --- NEW: CALCULATION MODE & SLIDERS ---
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  "Macro Calculation",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                DropdownButton<CalcMode>(
+                  value: currentCalcMode,
+                  underline: const SizedBox(), // Clean look
+                  items: const [
+                    DropdownMenuItem(
+                      value: CalcMode.standard,
+                      child: Text("Standard Base"),
+                    ),
+                    DropdownMenuItem(
+                      value: CalcMode.percentage,
+                      child: Text("Custom %"),
+                    ),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() => currentCalcMode = val);
+                      handleUpdate();
+                    }
+                  },
+                ),
+              ],
+            ),
+
+            if (currentCalcMode == CalcMode.percentage) ...[
+              const SizedBox(height: 16),
+              _buildMacroSliders(),
+            ],
+
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 24),
+
+            // STATS DISPLAY
             Text(
               currentBmi != null && currentCategory != null
                   ? "BMI: ${currentBmi!.toStringAsFixed(1)} ($currentCategory)"
@@ -417,6 +583,7 @@ class ProfilePageState extends State<ProfilePage> {
                   : "Maintenance Calories: ____",
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
+            const SizedBox(height: 40),
           ],
         ),
       ),
@@ -432,29 +599,11 @@ class ProfilePageState extends State<ProfilePage> {
           IconButton(
             onPressed: saveInfo,
             icon: const Icon(Icons.check), // Confirm button
+            tooltip: "Save Profile",
           ),
           IconButton(onPressed: logout, icon: const Icon(Icons.logout)),
         ],
       ),
-      /* appBar: AppBar(
-        title: const Text(
-          'Profile',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.check), // Confirm button
-            tooltip: "Confirm",
-            onPressed: saveInfo,
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: logout,
-            tooltip: "Logout",
-          ),
-        ],
-      ), */
       body: buildBody(),
     );
   }

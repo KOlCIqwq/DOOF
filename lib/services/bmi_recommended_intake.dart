@@ -224,3 +224,59 @@ class BmiRecommendedIntake {
     };
   }
 }
+
+class TdeeCalculator {
+  // 1. Calculate BMR (Basal Metabolic Rate) using Mifflin-St Jeor
+  static double calculateBMR({
+    required double weight,
+    required double heightCm,
+    required int age,
+    required Gender gender,
+  }) {
+    double bmr = (10 * weight) + (6.25 * heightCm) - (5 * age);
+    return gender == Gender.male ? bmr + 5 : bmr - 161;
+  }
+
+  // 2. Calculate TDEE (Total Daily Energy Expenditure)
+  static double calculateTDEE({
+    required double bmr,
+    required ActivityLevel activityLevel,
+  }) {
+    // Standard activity multipliers
+    switch (activityLevel) {
+      case ActivityLevel.noWorkout:
+        return bmr * 1.2; // Sedentary
+      case ActivityLevel.lightWorkout:
+        return bmr * 1.375; // Light exercise 1-3 days/week
+      case ActivityLevel.heavyWorkout:
+        return bmr * 1.725; // Hard exercise 6-7 days/week
+    }
+  }
+
+  // 3. Adjust for Phase (Cut, Bulk, Keep)
+  static double getTargetCalories(double tdee, ActivityPhase phase) {
+    switch (phase) {
+      case ActivityPhase.keep:
+        return tdee;
+      case ActivityPhase.cut:
+        return tdee - 500; // Standard 500 kcal deficit (1lb fat loss/week)
+      case ActivityPhase.bulk:
+        return tdee + 300; // Lean bulk surplus
+    }
+  }
+
+  // 4. Split calories into Macro Grams
+  // Carbs/Protein = 4 kcal per gram. Fat = 9 kcal per gram.
+  static Map<String, double> calculateMacros({
+    required double targetCalories,
+    required int carbPercent,
+    required int proteinPercent,
+    required int fatPercent,
+  }) {
+    return {
+      'carbs': (targetCalories * (carbPercent / 100.0)) / 4.0,
+      'protein': (targetCalories * (proteinPercent / 100.0)) / 4.0,
+      'fat': (targetCalories * (fatPercent / 100.0)) / 9.0,
+    };
+  }
+}
