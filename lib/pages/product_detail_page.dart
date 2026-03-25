@@ -52,6 +52,76 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 
+  String _getIngredientEmoji(String name) {
+    final n = name.toLowerCase();
+    if (n.contains('chicken') || n.contains('poultry') || n.contains('turkey'))
+      return '🍗';
+    if (n.contains('beef') ||
+        n.contains('steak') ||
+        n.contains('meat') ||
+        n.contains('pork'))
+      return '🥩';
+    if (n.contains('fish') || n.contains('salmon') || n.contains('tuna'))
+      return '🐟';
+    if (n.contains('egg')) return '🍳';
+    if (n.contains('milk') || n.contains('cheese') || n.contains('dairy'))
+      return '🧀';
+    if (n.contains('rice')) return '🍚';
+    if (n.contains('noodle') || n.contains('pasta')) return '🍝';
+    if (n.contains('bread') || n.contains('toast') || n.contains('bun'))
+      return '🍞';
+    if (n.contains('potato')) return '🥔';
+    if (n.contains('tomato')) return '🍅';
+    if (n.contains('onion') || n.contains('garlic')) return '🧅';
+    if (n.contains('veg') ||
+        n.contains('broccoli') ||
+        n.contains('spinach') ||
+        n.contains('lettuce'))
+      return '🥗';
+    if (n.contains('apple') || n.contains('fruit') || n.contains('berry'))
+      return '🍎';
+    if (n.contains('sauce') ||
+        n.contains('dressing') ||
+        n.contains('oil') ||
+        n.contains('butter'))
+      return '🧈';
+    if (n.contains('nut') || n.contains('peanut') || n.contains('almond'))
+      return '🥜';
+    return '🍽️'; // Default fallback
+  }
+
+  Widget _buildMacroChip(String label, String value, MaterialColor color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.shade50,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.shade100),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$label ',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              color: color.shade700,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: color.shade900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> openEditForm() async {
     final updatedItem = await Navigator.push<FoodItem>(
       context,
@@ -73,55 +143,129 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   Widget _buildIngredientsBreakdown(FoodItem product) {
     if (product.ingredients == null || product.ingredients!.isEmpty) {
-      return const SizedBox.shrink(); // Don't show anything if there are no ingredients
+      return const SizedBox.shrink();
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: EdgeInsets.only(top: 16, bottom: 12),
             child: Text(
               'Ingredient Breakdown',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),
-          ListView.builder(
-            shrinkWrap:
-                true, // Prevents scrolling conflicts with CustomScrollView
+          ListView.separated(
+            shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             padding: EdgeInsets.zero,
             itemCount: product.ingredients!.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final ing = product.ingredients![index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                elevation: 1,
-                child: ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Colors.orangeAccent,
-                    child: Icon(
-                      Icons.restaurant,
-                      color: Colors.white,
-                      size: 20,
+              final name = ing['name']?.toString() ?? 'Unknown';
+              final emoji = _getIngredientEmoji(name);
+
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade200),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: .03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
-                  ),
-                  title: Text(
-                    ing['name']?.toString() ?? 'Unknown Ingredient',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text('${ing['amount']} • ${ing['calories']} kcal'),
-                  trailing: Text(
-                    'P: ${ing['protein']}g\nC: ${ing['carbs']}g\nF: ${ing['fat']}g',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                      height: 1.3,
+                  ],
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // The Emoji Avatar
+                    Container(
+                      height: 48,
+                      width: 48,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          emoji,
+                          style: const TextStyle(fontSize: 24),
+                        ),
+                      ),
                     ),
-                    textAlign: TextAlign.right,
-                  ),
+                    const SizedBox(width: 14),
+
+                    // The Middle Section: Name and Colorful Macro Chips
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              _buildMacroChip(
+                                'P',
+                                '${ing['protein']}g',
+                                Colors.blue,
+                              ),
+                              const SizedBox(width: 6),
+                              _buildMacroChip(
+                                'C',
+                                '${ing['carbs']}g',
+                                Colors.orange,
+                              ),
+                              const SizedBox(width: 6),
+                              _buildMacroChip(
+                                'F',
+                                '${ing['fat']}g',
+                                Colors.red,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // The Right Section: Calories and Amount
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${ing['calories']} kcal',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${ing['amount']}',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               );
             },
