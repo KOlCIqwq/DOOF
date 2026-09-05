@@ -7,7 +7,6 @@ import '../models/food_item.dart';
 import '../widgets/product_preview_widget.dart';
 import 'product_detail_page.dart';
 import '../services/open_food_facts_api_service.dart';
-import '../services/user_service.dart';
 
 class CameraScannerPage extends StatefulWidget {
   const CameraScannerPage({super.key});
@@ -28,8 +27,6 @@ class _CameraScannerPageState extends State<CameraScannerPage>
   FoodItem? _scannedProduct;
   late AnimationController slideController;
   late Animation<Offset> _slideAnimation;
-
-  final UserService userService = UserService();
 
   @override
   void initState() {
@@ -134,17 +131,6 @@ class _CameraScannerPageState extends State<CameraScannerPage>
           categories: '',
           expirationDate: null,
         );
-
-        try {
-          await userService.upsertFoodItem(product);
-          //showErrorSnackbar("immediately save food item to Supabase:");
-        } catch (e) {
-          // If this fails
-          /* showErrorSnackbar(
-            "Failed to immediately save food item to Supabase: $e",
-          ); */
-          // Scanning twice the same product will result an error, don't display it
-        }
 
         if (!mounted) return;
         setState(() => _scannedProduct = product);

@@ -4,14 +4,14 @@ import 'package:uuid/uuid.dart';
 const uuid = Uuid();
 
 class InventoryModel {
-  final String id; // The id of the row in userItems
+  final String id;
   final String userId;
   final String foodId;
   final FoodItem foodItem; // The full, nested FoodItem object
 
   InventoryModel({
     required this.id,
-    required this.userId,
+    this.userId = '',
     required this.foodId,
     required this.foodItem,
   });
@@ -25,34 +25,31 @@ class InventoryModel {
     };
   }
 
-  // Factory constructor to parse the joined data from Supabase
   factory InventoryModel.fromJson(Map<String, dynamic> json) {
     final foodData = json['foodItems'] ?? json['foodItem'];
 
     if (foodData == null) {
-      // This can happen if the join fails for a specific row.
       throw Exception(
         'Inventory row with ID ${json['id']} is missing its food data.',
       );
     }
 
     final baseFoodItem = FoodItem.fromJson(foodData);
-    final correctQuantity = (json['quantity'] as num? ?? 0.0).toDouble();
+    final correctQuantity = (json['quantity'] as num?)?.toDouble() ?? baseFoodItem.inventoryGrams;
 
     return InventoryModel(
       id: json['id'] ?? '',
       userId: json['user_id'] ?? '',
-      foodId: json['food_id'] ?? '',
+      foodId: json['food_id'] ?? json['item_barcode'] ?? baseFoodItem.barcode,
 
       foodItem: baseFoodItem.copyWith(inventoryGrams: correctQuantity),
     );
   }
 
-  // Factory for creating a new inventory item that doesn't exist in DB yet
   factory InventoryModel.fromNewFoodItem(
-    FoodItem item, {
-    required String userId,
-  }) {
+    FoodItem item, [
+    String userId = '',
+  ]) {
     return InventoryModel(
       id: uuid.v4(),
       userId: userId,

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../services/bmi_recommended_intake.dart';
 import '../utils/recommended_intake_helper.dart';
 import '../models/profile_model.dart';
-import '../auth/auth_service.dart';
 
 class ProfilePage extends StatefulWidget {
   final ProfileModel? profile;
@@ -39,18 +38,12 @@ class ProfilePageState extends State<ProfilePage> {
   String? currentCategory;
   double? maintenanceCalories;
 
-  final authService = AuthService();
-
-  void logout() async {
-    await authService.signOut();
-  }
-
   void saveInfo() async {
     handleUpdate();
     widget.onSyncRequested();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Profile saved and synced!'),
+        content: Text('Profile saved!'),
         backgroundColor: Colors.green,
       ),
     );
@@ -330,17 +323,11 @@ class ProfilePageState extends State<ProfilePage> {
   }
 
   Widget buildBody() {
-    final currentEmail = authService.getCurrentEmail() ?? "No Email";
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            Text(
-              "Current User: $currentEmail",
-              style: const TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 24),
             InkWell(
               onTap: adjustWeight,
               child: Row(
@@ -601,7 +588,6 @@ class ProfilePageState extends State<ProfilePage> {
             icon: const Icon(Icons.check), // Confirm button
             tooltip: "Save Profile",
           ),
-          IconButton(onPressed: logout, icon: const Icon(Icons.logout)),
         ],
       ),
       body: buildBody(),

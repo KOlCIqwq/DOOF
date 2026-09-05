@@ -1,18 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:DOOF/auth/auth_gate.dart';
 import 'package:openfoodfacts/openfoodfacts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:DOOF/secrets.dart';
+import 'package:DOOF/pages/main_page.dart';
 
-void main() async {
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   // These settings are important for the Open Food Facts API
   OpenFoodAPIConfiguration.userAgent = UserAgent(name: 'FILO');
   OpenFoodAPIConfiguration.globalLanguages = <OpenFoodFactsLanguage>[
     OpenFoodFactsLanguage.ENGLISH,
   ];
   runApp(const MyApp());
-
-  await Supabase.initialize(url: supabaseURL, anonKey: supabaseAnon);
 }
 
 class MyApp extends StatelessWidget {
@@ -28,7 +25,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         useMaterial3: true,
       ),
-      home: const AuthGate(),
+      home: const MainPage(),
     );
   }
 }

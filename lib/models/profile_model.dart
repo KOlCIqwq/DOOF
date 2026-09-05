@@ -28,25 +28,7 @@ class ProfileModel {
     this.fatPercent = 30,
   });
 
-  // Used for reading from Supabase
-  factory ProfileModel.fromMap(Map<String, dynamic> map) {
-    return ProfileModel(
-      weight: (map['weight'] as num?)?.toDouble(),
-      height: (map['height'] as num?)?.toDouble(),
-      age: (map['age'] as num?)?.toDouble(),
-      gender: ProfileModel.genderFromNum(map['gender']),
-      activity: ProfileModel.activityFromNum(map['activity']),
-      phase: ProfileModel.phaseFromNum(map['phase']),
-
-      // Load the new fields
-      calcMode: ProfileModel.calcModeFromNum(map['calc_mode']),
-      carbPercent: (map['carb_percent'] as num?)?.toInt() ?? 40,
-      proteinPercent: (map['protein_percent'] as num?)?.toInt() ?? 30,
-      fatPercent: (map['fat_percent'] as num?)?.toInt() ?? 30,
-    );
-  }
-
-  // Used for a brand new user
+  // Default profile values
   factory ProfileModel.defaults() {
     return ProfileModel(
       weight: null,

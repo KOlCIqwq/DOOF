@@ -11,8 +11,6 @@ import 'inventory_page.dart';
 import 'recipe_page.dart';
 import 'stats_page.dart';
 import './profile_page.dart';
-import '../services/user_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/profile_model.dart';
 import '../services/profille_storage.dart';
 import '../models/inventory_model.dart';
@@ -28,16 +26,12 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   List<InventoryModel> inventoryItems = [];
-  List<InventoryModel> inventoryItemsToDelete = [];
-  List<InventoryModel> inventoryItemsToCreate = [];
-  List<InventoryModel> inventoryItemsToUpdate = [];
   List<ConsumptionLog> consumptionHistory = [];
   List<DailyStatsSummary> dailySummaries = [];
   bool _isLoading = true;
   int _currentIndex = 0;
   final PageController _pageController = PageController();
   ProfileModel? profileHistory;
-  bool isDataDirty = false;
 
   @override
   void initState() {
@@ -62,7 +56,6 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       saveAllData();
-      syncAllDataToSupabase();
     }
   }
 
@@ -88,34 +81,12 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   Future<void> _loadAllData() async {
     // Set loading state to true
     setState(() => _isLoading = true);
-    final user = Supabase.instance.client.auth.currentUser;
     try {
-      List<InventoryModel> loadedInventory = [];
-      if (user != null) {
-        // This query is still correct: it gets the inventory row and the food item
-        final inventoryData = await UserService().getInventoryFromUserId(
-          userId: user.id,
-        );
-        if (inventoryData.isNotEmpty) {
-          // Directly map the response to our new state model
-          loadedInventory = inventoryData
-              .map((data) => InventoryModel.fromJson(data))
-              .toList();
-        }
-      }
+      final loadedInventory = await InventoryStorageService.loadInventory();
       final consumption = await ConsumptionStorageService.loadConsumptionLog();
       final summaries = await DailyStatsStorageService.loadDailyStats();
-      ProfileModel loadedProfile;
-      if (user != null) {
-        final profileMap = await UserService().getProfile(user.id);
-        if (profileMap != null) {
-          loadedProfile = ProfileModel.fromMap(profileMap);
-        } else {
-          loadedProfile = ProfileModel.defaults();
-        }
-      } else {
-        loadedProfile = ProfileModel.defaults();
-      }
+      final loadedProfile =
+          await ProfileStorage.loadProfile() ?? ProfileModel.defaults();
       setState(() {
         inventoryItems = loadedInventory;
         consumptionHistory = consumption;
@@ -154,82 +125,6 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
 
     if (profileHistory != null) {
       await ProfileStorage.saveProfile(profileHistory!);
-    }
-  }
-
-  Future<void> syncAllDataToSupabase() async {
-    // Only run if there are pending changes.
-    if (!isDataDirty) {
-      return;
-    }
-
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) {
-      return;
-    }
-    try {
-      // Sync Profile Data
-      if (profileHistory != null) {
-        await UserService().updateProfile(
-          userId: user.id,
-          weight: profileHistory!.weight,
-          height: profileHistory!.height,
-          age: profileHistory!.age?.toInt(),
-          gender: profileHistory!.gender.index,
-          activity: profileHistory!.activity.index,
-          phase: profileHistory!.phase.index,
-          calcMode: profileHistory!.calcMode.index,
-          carbPercent: profileHistory!.carbPercent,
-          proteinPercent: profileHistory!.proteinPercent,
-          fatPercent: profileHistory!.fatPercent,
-        );
-
-        final allFoodItems = {
-          ...inventoryItemsToCreate.map((m) => m.foodItem),
-          ...inventoryItemsToUpdate.map((m) => m.foodItem),
-          ...inventoryItemsToDelete.map((m) => m.foodItem),
-        }.toList();
-
-        // Ensure all parent 'foodItems' exist.
-        if (allFoodItems.isNotEmpty) {
-          await UserService().upsertFoodItems(allFoodItems);
-        }
-
-        // DELETES.
-        final itemIdsToDelete = inventoryItemsToDelete
-            .map((m) => m.id)
-            .toList();
-        if (itemIdsToDelete.isNotEmpty) {
-          await UserService().deleteInventoryItems(itemIds: itemIdsToDelete);
-        }
-
-        //CREATES.
-        if (inventoryItemsToCreate.isNotEmpty) {
-          await UserService().upsertInventory(items: inventoryItemsToCreate);
-        }
-
-        // quantity UPDATES.
-        if (inventoryItemsToUpdate.isNotEmpty) {
-          await Future.wait(
-            inventoryItemsToUpdate.map((item) {
-              return UserService().updateQuantity(
-                userItemId: item
-                    .id, // We need to update the UserService method for this
-                quantity: item.foodItem.inventoryGrams.round(),
-              );
-            }),
-          );
-        }
-        showErrorSnackbar("Synced");
-        resetSyncState();
-      }
-
-      setState(() {
-        isDataDirty = false;
-        inventoryItemsToDelete.clear();
-      });
-    } catch (e) {
-      showErrorSnackbar("Can't sync:");
     }
   }
 
@@ -276,11 +171,6 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     }
   }
 
-  void setDirty() {
-    if (!isDataDirty) setState(() => isDataDirty = true);
-    syncAllDataToSupabase();
-  }
-
   // Add a new food item to inventory or update existing one
   void addNewItemToInventory(FoodItem newItem) {
     setState(() {
@@ -298,25 +188,12 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
           ),
         );
         inventoryItems[existingIndex] = updatedModel;
-        // Add it to the update list (if not already there)
-        inventoryItemsToUpdate.removeWhere(
-          (item) => item.id == updatedModel.id,
-        );
-        inventoryItemsToUpdate.add(updatedModel);
       } else {
-        // This is a brand new inventory item.
-        final newModel = InventoryModel.fromNewFoodItem(
-          newItem,
-          userId: Supabase.instance.client.auth.currentUser!.id,
-        );
+        final newModel = InventoryModel.fromNewFoodItem(newItem);
         inventoryItems.insert(0, newModel);
-        // Add it to the CREATE list.
-        inventoryItemsToCreate.add(newModel);
       }
-      setState(() {
-        setDirty();
-      });
     });
+    saveAllData();
   }
 
   // Update the entire inventory list, setting dirty
@@ -329,71 +206,23 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
           foodItem: model.foodItem.copyWith(inventoryGrams: newGrams),
         );
         inventoryItems[index] = updatedModel;
-
-        // If this was a newly created item, just update it in the create list.
-        final createIndex = inventoryItemsToCreate.indexWhere(
-          (item) => item.id == inventoryId,
-        );
-        if (createIndex != -1) {
-          inventoryItemsToCreate[createIndex] = updatedModel;
-        } else {
-          // Otherwise, add it to the update list.
-          inventoryItemsToUpdate.removeWhere(
-            (item) => item.id == updatedModel.id,
-          );
-          inventoryItemsToUpdate.add(updatedModel);
-        }
       }
     });
-    setState(() {
-      setDirty();
-    });
+    saveAllData();
   }
 
   void deleteItemFromInventory(String inventoryId) {
     setState(() {
-      final index = inventoryItems.indexWhere((item) => item.id == inventoryId);
-      if (index != -1) {
-        final itemToDelete = inventoryItems[index];
-
-        // If this item was just created locally and never synced,
-        // we can just remove it from the create list and we're done.
-        final createIndex = inventoryItemsToCreate.indexWhere(
-          (item) => item.id == inventoryId,
-        );
-        if (createIndex != -1) {
-          inventoryItemsToCreate.removeAt(createIndex);
-        } else {
-          // Otherwise, it's an item that exists on the server and needs to be deleted.
-          inventoryItemsToDelete.add(itemToDelete);
-          // Also remove it from any pending updates.
-          inventoryItemsToUpdate.removeWhere((item) => item.id == inventoryId);
-        }
-
-        inventoryItems.removeAt(index);
-      }
+      inventoryItems.removeWhere((item) => item.id == inventoryId);
     });
-    setState(() {
-      setDirty();
-    });
+    saveAllData();
   }
 
   void clearAllInventory() {
     setState(() {
-      // Add all current inventory IDs to the delete list
-      inventoryItemsToDelete.addAll(inventoryItems);
-      // Clear the live list
       inventoryItems.clear();
-      setDirty();
     });
-  }
-
-  void resetSyncState() {
-    setState(() {
-      inventoryItemsToCreate.clear();
-      inventoryItemsToUpdate.clear();
-      inventoryItemsToDelete.clear();
-    });
+    saveAllData();
   }
 
   // Log a food item consumption
@@ -447,7 +276,6 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       showErrorSnackbar("Item not found in the inventory???");
     }
     saveAllData(); // Persist changes
-    syncAllDataToSupabase();
   }
 
   // Log a recipe consumption
@@ -489,8 +317,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   void handleProfileUpdate(ProfileModel updatedProfile) {
     setState(() {
       profileHistory = updatedProfile;
-      isDataDirty = true; // Mark data as dirty
     });
+    saveAllData();
   }
 
   // Map Spoonacular nutrient names to Open Food Facts keys
@@ -595,8 +423,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                   profile: profileHistory,
                   onProfileChanged: handleProfileUpdate,
                   onSyncRequested: () async {
-                    await saveAllData(); // Save locally
-                    await syncAllDataToSupabase(); // then sync with DB
+                    await saveAllData();
                   },
                 ),
               ],
